@@ -1,0 +1,297 @@
+/* 布局样式 */
+
+/* 整体布局容器 */
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: var(--color-bg-layout);
+}
+
+/* 顶部导航 */
+.top-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--header-height);
+  background: linear-gradient(135deg, #001529 0%, #002140 100%);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--spacing-lg);
+  z-index: 1000;
+  box-shadow: var(--shadow-md);
+}
+
+.top-nav__logo {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: #fff;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  margin-right: var(--spacing-xl);
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+
+.top-nav__logo:hover {
+  opacity: 0.85;
+}
+
+.top-nav__logo-icon {
+  width: 32px;
+  height: 32px;
+  background: var(--color-primary);
+  border-radius: var(--border-radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: var(--font-size-base);
+}
+
+.top-nav__menu {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  flex: 1;
+}
+
+.top-nav__item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
+  color: rgba(255, 255, 255, 0.75);
+  text-decoration: none;
+  border-radius: var(--border-radius-md);
+  transition: all var(--transition-fast);
+  font-size: var(--font-size-base);
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+.top-nav__item:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.top-nav__item--active {
+  color: #fff;
+  background: var(--color-primary);
+}
+
+.top-nav__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+/* 主体区域 */
+.app-body {
+  display: flex;
+  flex: 1;
+  margin-top: var(--header-height);
+}
+
+/* 侧边菜单 */
+.side-menu {
+  position: fixed;
+  top: var(--header-height);
+  left: 0;
+  bottom: 0;
+  width: var(--sider-width);
+  background: var(--color-bg-container);
+  border-right: 1px solid var(--color-border-light);
+  overflow-y: auto;
+  transition: width var(--transition-normal);
+  z-index: 100;
+}
+
+.side-menu--collapsed {
+  width: var(--sider-collapsed-width);
+}
+
+.side-menu__section {
+  padding: var(--spacing-md) 0;
+}
+
+.side-menu__section-title {
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.side-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  margin: 2px var(--spacing-sm);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  border-radius: var(--border-radius-md);
+  transition: all var(--transition-fast);
+  font-size: var(--font-size-base);
+  cursor: pointer;
+  border: none;
+  background: none;
+  width: calc(100% - var(--spacing-sm) * 2);
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.side-menu__item:hover {
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+
+.side-menu__item--active {
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+  font-weight: 500;
+}
+
+.side-menu__item-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* 主内容区域 */
+.main-content {
+  flex: 1;
+  margin-left: var(--sider-width);
+  padding: var(--spacing-lg);
+  min-height: calc(100vh - var(--header-height));
+  transition: margin-left var(--transition-normal);
+}
+
+.main-content--no-sider {
+  margin-left: 0;
+}
+
+.main-content--sider-collapsed {
+  margin-left: var(--sider-collapsed-width);
+}
+
+/* 页面头部 */
+.page-header {
+  margin-bottom: var(--spacing-lg);
+}
+
+.page-header__title {
+  font-size: var(--font-size-xxl);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0 0 var(--spacing-xs) 0;
+}
+
+.page-header__subtitle {
+  font-size: var(--font-size-base);
+  color: var(--color-text-tertiary);
+  margin: 0;
+}
+
+.page-header__breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+  margin-bottom: var(--spacing-sm);
+}
+
+.page-header__breadcrumb a {
+  color: var(--color-text-secondary);
+  text-decoration: none;
+}
+
+.page-header__breadcrumb a:hover {
+  color: var(--color-primary);
+}
+
+/* 页面容器 */
+.page-container {
+  background: var(--color-bg-container);
+  border-radius: var(--border-radius-lg);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+/* 卡片组件 */
+.card {
+  background: var(--color-bg-container);
+  border-radius: var(--border-radius-lg);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-md);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.card__title {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+/* 占位页面样式 */
+.placeholder-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  background: var(--color-bg-container);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.placeholder-page__icon {
+  font-size: 64px;
+  margin-bottom: var(--spacing-lg);
+  opacity: 0.5;
+}
+
+.placeholder-page__title {
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0 0 var(--spacing-sm) 0;
+}
+
+.placeholder-page__desc {
+  font-size: var(--font-size-base);
+  color: var(--color-text-tertiary);
+  margin: 0;
+}
+
+/* 响应式布局 */
+@media (max-width: 992px) {
+  .side-menu {
+    transform: translateX(-100%);
+  }
+
+  .side-menu--open {
+    transform: translateX(0);
+  }
+
+  .main-content {
+    margin-left: 0;
+  }
+}

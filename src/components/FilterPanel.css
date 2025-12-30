@@ -1,0 +1,236 @@
+.filter-panel {
+  max-width: 900px;
+  max-height: 90vh;
+}
+
+.preset-section {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+}
+
+.preset-section h3 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.preset-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.preset-item:hover {
+  border-color: var(--primary);
+  box-shadow: 0 2px 4px rgba(24, 144, 255, 0.1);
+}
+
+.preset-item.active {
+  border-color: var(--primary);
+  background: rgba(74, 158, 255, 0.15);
+}
+
+.preset-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.preset-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.default-badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  background: #52c41a;
+  color: white;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.preset-description {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.preset-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.filter-form {
+  margin-bottom: 16px;
+}
+
+.filter-form h3 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 8px;
+}
+
+.form-row {
+  margin-bottom: 12px;
+}
+
+.form-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 500;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.form-row input[type="text"],
+.form-row input[type="number"],
+.form-row select {
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 14px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  transition: border-color 0.2s;
+}
+
+.form-row input[type="text"]:focus,
+.form-row input[type="number"]:focus,
+.form-row select:focus {
+  border-color: var(--primary);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+}
+
+.range-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.range-input input {
+  flex: 1;
+}
+
+.range-input span {
+  color: var(--text-muted);
+  font-weight: normal;
+}
+
+.save-dialog {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+
+.save-dialog h3 {
+  margin: 0 0 12px 0;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.dialog-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.dialog-buttons button {
+  padding: 6px 16px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.dialog-buttons button:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--bg-hover);
+}
+
+.dialog-buttons button:first-child {
+  background: #1890ff;
+  color: white;
+  border-color: var(--primary);
+}
+
+.dialog-buttons button:first-child:hover {
+  background: #40a9ff;
+  border-color: #40a9ff;
+  color: white;
+}
+
+.btn-small {
+  padding: 4px 10px;
+  font-size: 0.85rem;
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-small:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--bg-hover);
+}
+
+.btn-small.btn-danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.btn-small.btn-danger:hover {
+  background: rgba(255, 77, 79, 0.1);
+  border-color: var(--danger);
+}
+
+.btn-primary {
+  background: #1890ff !important;
+  color: white !important;
+  border-color: var(--primary) !important;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #40a9ff !important;
+  border-color: #40a9ff !important;
+}
+
+.error {
+  padding: 12px;
+  margin-bottom: 16px;
+  background: rgba(255, 77, 79, 0.1);
+  border: 1px solid var(--danger);
+  border-radius: 4px;
+  color: var(--danger);
+  font-size: 14px;
+}

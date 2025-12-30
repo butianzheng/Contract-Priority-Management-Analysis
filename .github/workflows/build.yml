@@ -1,0 +1,110 @@
+name: Build and Release DPM App
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - os: windows-latest
+            rust_target: x86_64-pc-windows-msvc
+          - os: macos-latest
+            rust_target: x86_64-apple-darwin
+          - os: ubuntu-20.04
+            rust_target: x86_64-unknown-linux-gnu
+
+    runs-on: ${{ matrix.platform.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.rust_target }}
+
+      - name: Install dependencies (Ubuntu only)
+        if: matrix.platform.os == 'ubuntu-20.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install frontend dependencies
+        run: npm install
+
+      - name: Build the app
+        run: npm run tauri build
+
+      - name: Upload artifacts (Windows)
+        if: matrix.platform.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-msi
+          path: src-tauri/target/release/bundle/msi/*.msi
+
+      - name: Upload artifacts (macOS)
+        if: matrix.platform.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: src-tauri/target/release/bundle/dmg/*.dmg
+
+      - name: Upload artifacts (Linux - AppImage)
+        if: matrix.platform.os == 'ubuntu-20.04'
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-appimage
+          path: src-tauri/target/release/bundle/appimage/*.AppImage*
+
+      - name: Upload artifacts (Linux - deb)
+        if: matrix.platform.os == 'ubuntu-20.04'
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-deb
+          path: src-tauri/target/release/bundle/deb/*.deb
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/windows-msi/*.msi
+            artifacts/macos-dmg/*.dmg
+            artifacts/linux-appimage/*.AppImage
+            artifacts/linux-deb/*.deb
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

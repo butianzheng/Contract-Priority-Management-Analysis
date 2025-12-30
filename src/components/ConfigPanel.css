@@ -1,0 +1,207 @@
+.config-panel {
+  max-width: 1200px;
+  max-height: 80vh;
+}
+
+.user-info {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+}
+
+.user-info label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.user-info input {
+  padding: 6px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 14px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.category-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+}
+
+.category-filter label {
+  font-weight: 500;
+  margin-right: 8px;
+}
+
+.category-filter button {
+  padding: 6px 12px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 14px;
+}
+
+.category-filter button:hover {
+  background: var(--bg-hover);
+  border-color: var(--primary);
+}
+
+.category-filter button.active {
+  background: #1890ff;
+  color: white;
+  border-color: var(--primary);
+}
+
+.config-list {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 500px;
+}
+
+.config-list table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.config-list thead {
+  position: sticky;
+  top: 0;
+  background: var(--bg-tertiary);
+  z-index: 1;
+}
+
+.config-list th {
+  padding: 12px 8px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-primary);
+  border-bottom: 2px solid var(--border-focus);
+  white-space: nowrap;
+}
+
+.config-list td {
+  padding: 12px 8px;
+  border-bottom: 1px solid var(--border-light);
+  color: var(--text-primary);
+}
+
+.config-list tr:hover {
+  background: var(--bg-hover);
+}
+
+.config-key {
+  font-family: monospace;
+  font-weight: 500;
+  color: #1890ff;
+  max-width: 200px;
+  word-break: break-word;
+}
+
+.config-value input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 14px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.config-value input:focus {
+  border-color: var(--primary);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+}
+
+.description {
+  max-width: 250px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.constraint {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.badge-s_score {
+  background: rgba(24, 144, 255, 0.2);
+  color: var(--primary);
+}
+
+.badge-p_score {
+  background: rgba(82, 196, 26, 0.2);
+  color: var(--success);
+}
+
+.badge-general {
+  background: rgba(250, 140, 22, 0.2);
+  color: var(--warning);
+}
+
+.actions {
+  white-space: nowrap;
+}
+
+.actions input.reason-input {
+  width: 150px;
+  padding: 4px 8px;
+  margin-right: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 13px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.actions button {
+  margin-left: 4px;
+}
+
+.btn-primary {
+  background: #1890ff !important;
+  color: white !important;
+  border-color: var(--primary) !important;
+}
+
+.btn-primary:hover {
+  background: #40a9ff !important;
+  border-color: #40a9ff !important;
+}
+
+.loading {
+  text-align: center;
+  padding: 20px;
+  color: var(--text-secondary);
+}
+
+.error {
+  padding: 12px;
+  margin-bottom: 16px;
+  background: rgba(255, 77, 79, 0.1);
+  border: 1px solid var(--danger);
+  border-radius: 4px;
+  color: var(--danger);
+  font-size: 14px;
+}

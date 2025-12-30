@@ -1,0 +1,482 @@
+.cockpit-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  height: calc(100vh - var(--header-height) - var(--spacing-lg) * 2);
+}
+
+/* 顶部统计概览 */
+.cockpit-overview {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--spacing-md);
+}
+
+.overview-card {
+  background: var(--color-bg-container);
+  border-radius: var(--border-radius-lg);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.overview-card.highlight {
+  background: linear-gradient(135deg, var(--color-primary), #1890ff);
+  color: #fff;
+}
+
+.overview-card.highlight .overview-card-label {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.overview-card.highlight .overview-card-value {
+  color: #fff;
+}
+
+.overview-card-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+
+.overview-card-value {
+  font-size: var(--font-size-xxl);
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.overview-card-trend {
+  font-size: var(--font-size-sm);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.overview-card-trend.up {
+  color: var(--color-success);
+}
+
+.overview-card-trend.down {
+  color: var(--color-error);
+}
+
+/* 主内容区域 */
+.cockpit-main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: var(--spacing-md);
+  min-height: 0;
+}
+
+/* 左侧区域 */
+.cockpit-left {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  min-height: 0;
+}
+
+/* 节奏热图 */
+.rhythm-heatmap {
+  background: var(--color-bg-container);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--spacing-md);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.rhythm-heatmap-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-md);
+}
+
+.rhythm-heatmap-header h3 {
+  margin: 0;
+  font-size: var(--font-size-base);
+  font-weight: 600;
+}
+
+.rhythm-legend {
+  display: flex;
+  gap: var(--spacing-md);
+  font-size: var(--font-size-sm);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.legend-color.high {
+  background: var(--color-error);
+}
+
+.legend-color.medium {
+  background: var(--color-warning);
+}
+
+.legend-color.low {
+  background: var(--color-success);
+}
+
+.rhythm-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 80px repeat(3, 1fr);
+  gap: 2px;
+  overflow: auto;
+}
+
+.rhythm-header {
+  background: var(--color-bg-layout);
+  padding: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-align: center;
+  border-radius: var(--border-radius-sm);
+}
+
+.rhythm-row-label {
+  background: var(--color-bg-layout);
+  padding: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  display: flex;
+  align-items: center;
+  border-radius: var(--border-radius-sm);
+}
+
+.rhythm-cell {
+  padding: var(--spacing-sm);
+  border-radius: var(--border-radius-sm);
+  text-align: center;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  transition: transform var(--transition-fast);
+  cursor: pointer;
+}
+
+.rhythm-cell:hover {
+  transform: scale(1.05);
+  z-index: 1;
+}
+
+.rhythm-cell.high {
+  background: rgba(255, 77, 79, 0.2);
+  color: var(--color-error);
+}
+
+.rhythm-cell.medium {
+  background: rgba(250, 173, 20, 0.2);
+  color: var(--color-warning);
+}
+
+.rhythm-cell.low {
+  background: rgba(82, 196, 26, 0.2);
+  color: var(--color-success);
+}
+
+/* 优先级分布 */
+.priority-distribution {
+  background: var(--color-bg-container);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--spacing-md);
+}
+
+.priority-distribution h3 {
+  margin: 0 0 var(--spacing-md) 0;
+  font-size: var(--font-size-base);
+  font-weight: 600;
+}
+
+.distribution-bars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.distribution-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.bar-label {
+  width: 80px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.bar-track {
+  flex: 1;
+  height: 24px;
+  background: var(--color-bg-layout);
+  border-radius: var(--border-radius-sm);
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: var(--border-radius-sm);
+  transition: width 0.5s ease;
+}
+
+.bar-fill.urgent {
+  background: linear-gradient(90deg, var(--color-error), #ff7875);
+}
+
+.bar-fill.high {
+  background: linear-gradient(90deg, var(--color-warning), #ffc53d);
+}
+
+.bar-fill.normal {
+  background: linear-gradient(90deg, var(--color-primary), #40a9ff);
+}
+
+.bar-fill.low {
+  background: linear-gradient(90deg, var(--color-success), #73d13d);
+}
+
+.bar-value {
+  width: 60px;
+  text-align: right;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+/* 右侧区域 */
+.cockpit-right {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  min-height: 0;
+}
+
+/* 问题清单 */
+.issues-panel {
+  background: var(--color-bg-container);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-sm);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.issues-header {
+  padding: var(--spacing-md);
+  border-bottom: 1px solid var(--color-border-light);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.issues-header h3 {
+  margin: 0;
+  font-size: var(--font-size-base);
+  font-weight: 600;
+}
+
+.issue-count {
+  background: var(--color-error);
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+.issues-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-sm);
+}
+
+.issue-item {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--border-radius-md);
+  margin-bottom: var(--spacing-xs);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.issue-item:hover {
+  background: var(--color-primary-light);
+}
+
+.issue-item.critical {
+  border-left: 3px solid var(--color-error);
+  background: rgba(255, 77, 79, 0.05);
+}
+
+.issue-item.warning {
+  border-left: 3px solid var(--color-warning);
+  background: rgba(250, 173, 20, 0.05);
+}
+
+.issue-item.info {
+  border-left: 3px solid var(--color-primary);
+  background: rgba(24, 144, 255, 0.05);
+}
+
+.issue-title {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  margin-bottom: 4px;
+}
+
+.issue-meta {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+/* 决策建议 */
+.decisions-panel {
+  background: var(--color-bg-container);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-sm);
+  max-height: 280px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.decisions-header {
+  padding: var(--spacing-md);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.decisions-header h3 {
+  margin: 0;
+  font-size: var(--font-size-base);
+  font-weight: 600;
+}
+
+.decisions-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-sm);
+}
+
+.decision-item {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-layout);
+  margin-bottom: var(--spacing-xs);
+}
+
+.decision-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.decision-priority {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.decision-priority.high {
+  background: var(--color-error);
+  color: #fff;
+}
+
+.decision-priority.medium {
+  background: var(--color-warning);
+  color: #fff;
+}
+
+.decision-priority.low {
+  background: var(--color-success);
+  color: #fff;
+}
+
+.decision-action {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
+.decision-impact {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+/* 加载状态 */
+.cockpit-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: var(--color-text-tertiary);
+}
+
+/* ============================================ */
+/* Phase 16: KPI 卡片样式 */
+/* ============================================ */
+
+.kpi-overview {
+  background: var(--color-bg-container);
+  border-radius: var(--border-radius-lg);
+  padding: var(--spacing-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.kpi-section {
+  background: var(--color-bg-layout);
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-sm);
+}
+
+.kpi-card {
+  background: var(--color-bg-container);
+  border-radius: var(--border-radius-sm);
+  padding: var(--spacing-sm);
+  border: 1px solid var(--color-border-light);
+}
+
+.kpi-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-xs);
+}
+
+.kpi-name {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100px;
+}
+
+.kpi-value {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+}
+
+.kpi-change {
+  font-size: 10px;
+  margin-top: 2px;
+}

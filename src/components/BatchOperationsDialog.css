@@ -1,0 +1,295 @@
+/* 批量操作对话框样式 - 使用统一的 CSS 变量 */
+
+.batch-operations-dialog {
+  max-width: 900px;
+  max-height: 85vh;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 2px solid var(--color-border);
+  margin-bottom: 20px;
+}
+
+.tab {
+  padding: 10px 20px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s;
+}
+
+.tab:hover {
+  color: var(--color-primary);
+}
+
+.tab.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+.tab-content {
+  padding: 20px 0;
+}
+
+.info-box {
+  padding: 16px;
+  background: var(--color-primary-light);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--border-radius-sm);
+  margin-bottom: 20px;
+}
+
+.info-box.warning {
+  background: rgba(250, 173, 20, 0.1);
+  border-color: var(--color-warning);
+}
+
+.info-box p {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: var(--color-text-primary);
+}
+
+.info-box p:last-child {
+  margin-bottom: 0;
+}
+
+.selected-contracts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.contract-tag {
+  padding: 4px 10px;
+  background: var(--color-bg-layout);
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  font-size: 13px;
+  font-family: monospace;
+  color: var(--color-text-primary);
+}
+
+.contract-tag.more {
+  background: var(--color-bg-container);
+  color: var(--color-text-secondary);
+}
+
+.form-section {
+  max-width: 600px;
+}
+
+.form-row {
+  margin-bottom: 16px;
+}
+
+.form-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  font-size: 14px;
+}
+
+.form-row input[type="number"],
+.form-row input[type="text"],
+.form-row textarea {
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  font-size: 14px;
+  background: var(--color-bg-container);
+  color: var(--color-text-primary);
+  transition: border-color 0.2s;
+}
+
+.form-row input:focus,
+.form-row textarea:focus {
+  border-color: var(--color-primary);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-primary-light);
+}
+
+.form-row textarea {
+  resize: vertical;
+  font-family: inherit;
+}
+
+.help-text {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  margin-top: -2px;
+}
+
+.btn-large {
+  width: 100%;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  margin-top: 10px;
+}
+
+/* 使用 Dialog.css 中定义的 btn-primary 和 btn-danger */
+
+.controls-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.controls-bar label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.controls-bar select {
+  padding: 6px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  font-size: 14px;
+  background: var(--color-bg-container);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.history-list {
+  overflow-x: auto;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.history-list table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.history-list thead {
+  position: sticky;
+  top: 0;
+  background: var(--color-bg-layout);
+  z-index: 1;
+}
+
+.history-list th {
+  padding: 12px 8px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  border-bottom: 2px solid var(--color-primary);
+  white-space: nowrap;
+}
+
+.history-list td {
+  padding: 12px 8px;
+  border-bottom: 1px solid var(--color-border-light);
+  color: var(--color-text-primary);
+}
+
+.history-list tr:hover {
+  background: var(--color-primary-light);
+}
+
+.type-badge {
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.type-badge.adjust {
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+}
+
+.type-badge.restore {
+  background: rgba(250, 140, 22, 0.2);
+  color: var(--color-warning);
+}
+
+.reason-cell {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.time-cell {
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+}
+
+.batch-details {
+  margin-top: 20px;
+  padding: 16px;
+  background: var(--color-bg-layout);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+}
+
+.batch-details h4 {
+  margin: 0 0 12px 0;
+  font-size: 15px;
+  color: var(--color-text-primary);
+}
+
+.contracts-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.btn-small {
+  padding: 4px 10px;
+  font-size: 13px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-container);
+  color: var(--color-text-secondary);
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-small:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+
+.loading {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+}
+
+.no-data {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--color-text-tertiary);
+  font-size: 14px;
+}
+
+.error {
+  padding: 12px;
+  margin-bottom: 16px;
+  background: rgba(255, 77, 79, 0.1);
+  border: 1px solid var(--color-error);
+  border-radius: var(--border-radius-sm);
+  color: var(--color-error);
+  font-size: 14px;
+}

@@ -235,9 +235,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a3a315226fdc5b1c3e33521073e1712a05944bc0664d665ff1f6ff0396334da"
 dependencies = [
  "byteorder",
+ "chrono",
  "codepage",
  "encoding_rs",
  "log",
+ "once_cell",
  "quick-xml 0.31.0",
  "serde",
  "zip 0.6.6",
@@ -659,11 +661,12 @@ dependencies = [
 
 [[package]]
 name = "dpm-app"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "calamine",
  "chrono",
  "csv",
+ "indexmap 2.12.1",
  "r2d2",
  "r2d2_sqlite",
  "regex",

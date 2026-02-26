@@ -1,5 +1,5 @@
 use super::types::ValidationError;
-use calamine::{DataType, Reader, Xlsx};
+use calamine::{Reader, Xlsx};
 use csv::ReaderBuilder;
 use std::collections::HashMap;
 use std::io::Cursor;
@@ -195,7 +195,7 @@ impl GenericParser {
                 serde_json::Value::Object(obj) => {
                     let mut row = RawRow::new();
                     for header in &headers {
-                        let value = match obj.get(header) {
+                        let value = match obj.get(header.as_str()) {
                             Some(serde_json::Value::String(s)) => s.clone(),
                             Some(serde_json::Value::Number(n)) => n.to_string(),
                             Some(serde_json::Value::Bool(b)) => b.to_string(),
@@ -309,10 +309,10 @@ impl GenericParser {
             calamine::Data::Error(e) => format!("#ERR:{:?}", e),
             calamine::Data::DateTime(dt) => {
                 // calamine DateTime 转字符串
-                if let Some(s) = dt.as_datetime() {
+                if let Some(s) = (*dt).as_datetime() {
                     s.format("%Y-%m-%d").to_string()
                 } else {
-                    dt.to_string()
+                    format!("{}", dt)
                 }
             }
             calamine::Data::DateTimeIso(s) => s.clone(),

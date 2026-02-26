@@ -20,6 +20,7 @@ import { Scoring } from "./pages/Settings/Scoring";
 import { Weights } from "./pages/Settings/Weights";
 import { System } from "./pages/Settings/System";
 import { SpecFamilyPage } from "./pages/Settings/SpecFamily";
+import { FieldMappingPage } from "./pages/Settings/FieldMapping";
 
 import "./styles/variables.css";
 import "./styles/common.css";
@@ -62,6 +63,7 @@ function App() {
             <Route index element={<Settings />} />
             <Route path="data" element={<DataSource />} />
             <Route path="transform" element={<Transform />} />
+            <Route path="field-mapping" element={<FieldMappingPage />} />
             <Route path="spec-family" element={<SpecFamilyPage />} />
             <Route path="scoring" element={<Scoring />} />
             <Route path="weights" element={<Weights />} />

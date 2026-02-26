@@ -337,6 +337,58 @@ export interface ConflictRecord {
   action?: ConflictStrategy;
 }
 
+export type FieldType = "string" | "float" | "integer" | "date";
+
+export interface TargetFieldDef {
+  name: string;
+  display_name: string;
+  required: boolean;
+  field_type: FieldType;
+  default_value?: string | null;
+}
+
+export interface FieldMappingResult {
+  mappings: Record<string, string>;
+  unmapped_targets: string[];
+  unmapped_sources: string[];
+  confidence: Record<string, number>;
+}
+
+export interface TransformConfig {
+  field_transforms: Record<string, any[]>;
+  default_values?: Record<string, {
+    value: string;
+    condition: "when_empty" | "when_missing" | "always";
+  }>;
+}
+
+export interface FieldAlignmentRule {
+  rule_id?: number;
+  rule_name: string;
+  data_type: string;
+  source_type?: string | null;
+  description?: string | null;
+  enabled: number;
+  priority: number;
+  field_mapping: string;
+  value_transform?: string | null;
+  default_values?: string | null;
+  created_by: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface FieldAlignmentChangeLog {
+  log_id?: number;
+  rule_id: number;
+  change_type: string;
+  old_value?: string | null;
+  new_value?: string | null;
+  change_reason?: string | null;
+  changed_by: string;
+  changed_at?: string | null;
+}
+
 export interface ImportPreview {
   total_rows: number;
   valid_rows: number;
@@ -631,9 +683,17 @@ export const api = {
   async previewImport(
     file_path: string,
     data_type: ImportDataType,
-    format: FileFormat
+    format: FileFormat,
+    field_mapping?: Record<string, string>,
+    value_transforms?: Record<string, any>
   ): Promise<ImportPreview> {
-    return invoke("preview_import", { filePath: file_path, dataType: data_type, format });
+    return invoke("preview_import", {
+      filePath: file_path,
+      dataType: data_type,
+      format,
+      fieldMapping: field_mapping,
+      valueTransforms: value_transforms,
+    });
   },
 
   /**
@@ -644,7 +704,9 @@ export const api = {
     data_type: ImportDataType,
     format: FileFormat,
     conflict_strategy: ConflictStrategy,
-    conflict_decisions?: ConflictRecord[]
+    conflict_decisions?: ConflictRecord[],
+    field_mapping?: Record<string, string>,
+    value_transforms?: Record<string, any>
   ): Promise<ImportResult> {
     return invoke("execute_import", {
       filePath: file_path,
@@ -652,7 +714,90 @@ export const api = {
       format,
       conflictStrategy: conflict_strategy,
       conflictDecisions: conflict_decisions,
+      fieldMapping: field_mapping,
+      valueTransforms: value_transforms,
     });
+  },
+
+  /**
+   * 解析文件头
+   */
+  async parseFileHeaders(
+    file_path: string,
+    format: FileFormat
+  ): Promise<string[]> {
+    return invoke("parse_file_headers", { filePath: file_path, format });
+  },
+
+  /**
+   * 获取目标字段定义
+   */
+  async getTargetFields(
+    data_type: ImportDataType
+  ): Promise<TargetFieldDef[]> {
+    return invoke("get_target_fields", { dataType: data_type });
+  },
+
+  /**
+   * 自动检测字段映射
+   */
+  async autoDetectMapping(
+    file_path: string,
+    format: FileFormat,
+    data_type: ImportDataType
+  ): Promise<FieldMappingResult> {
+    return invoke("auto_detect_mapping", { filePath: file_path, format, dataType: data_type });
+  },
+
+  /**
+   * 验证表达式语法
+   */
+  async validateExpression(expression: string): Promise<boolean> {
+    return invoke("validate_expression", { expression });
+  },
+
+  /**
+   * 测试表达式
+   */
+  async testExpression(
+    expression: string,
+    sample_row: Record<string, string>
+  ): Promise<string> {
+    return invoke("test_expression", { expression, sampleRow: sample_row });
+  },
+
+  /**
+   * 获取字段映射规则
+   */
+  async getFieldAlignmentRules(
+    data_type?: string,
+    include_disabled?: boolean
+  ): Promise<FieldAlignmentRule[]> {
+    return invoke("get_field_alignment_rules", { dataType: data_type, includeDisabled: include_disabled });
+  },
+
+  /**
+   * 获取字段映射规则变更日志
+   */
+  async getFieldAlignmentChangeLogs(
+    rule_id?: number,
+    limit?: number
+  ): Promise<FieldAlignmentChangeLog[]> {
+    return invoke("get_field_alignment_change_logs", { ruleId: rule_id, limit });
+  },
+
+  /**
+   * 保存字段映射规则（新建/更新）
+   */
+  async saveFieldAlignmentRule(rule: FieldAlignmentRule, user: string): Promise<number> {
+    return invoke("save_field_alignment_rule", { rule, user });
+  },
+
+  /**
+   * 删除字段映射规则
+   */
+  async deleteFieldAlignmentRule(rule_id: number, user: string): Promise<void> {
+    return invoke("delete_field_alignment_rule", { ruleId: rule_id, user });
   },
 
   /**

@@ -72,6 +72,7 @@ const menuConfigs: Record<string, MenuSection[]> = {
         { path: "/settings", label: "概览", icon: "🏠" },
         { path: "/settings/data", label: "数据源", icon: "💾" },
         { path: "/settings/transform", label: "清洗规则", icon: "🔧" },
+        { path: "/settings/field-mapping", label: "字段映射", icon: "🧭" },
         { path: "/settings/spec-family", label: "规格族", icon: "📦" },
       ],
     },

@@ -2,12 +2,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
-mod config;  // 🆕 配置模块
+mod config; // 🆕 配置模块
 mod db;
-mod io;      // 🆕 导入/导出模块
-mod kpi;     // 🆕 KPI 计算引擎模块
+mod io; // 🆕 导入/导出模块
+mod kpi; // 🆕 KPI 计算引擎模块
 mod scoring;
-mod validation;  // 🆕 数据校验模块
+mod validation; // 🆕 数据校验模块
 
 fn main() {
     // 构建上下文，确保数据库路径与 tauri.conf.json 配置一致
@@ -51,6 +51,11 @@ fn main() {
             // 统一历史记录查询
             commands::get_unified_history,
             // 导入/导出命令
+            commands::parse_file_headers,
+            commands::get_target_fields,
+            commands::auto_detect_mapping,
+            commands::validate_expression,
+            commands::test_expression,
             commands::preview_import,
             commands::execute_import,
             commands::export_data,
@@ -124,6 +129,9 @@ fn main() {
             commands::rollback_import,
             commands::get_import_statistics,
             commands::get_field_alignment_rules,
+            commands::get_field_alignment_change_logs,
+            commands::save_field_alignment_rule,
+            commands::delete_field_alignment_rule,
             commands::create_field_alignment_rule,
             commands::get_duplicate_detection_config,
             commands::get_pending_similar_pairs,

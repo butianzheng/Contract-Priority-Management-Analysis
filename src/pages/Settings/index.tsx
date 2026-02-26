@@ -37,6 +37,20 @@ export function Settings() {
           </ul>
         </Link>
 
+        <Link to="/settings/field-mapping" className="settings-card">
+          <span className="settings-card__icon">🧭</span>
+          <h3 className="settings-card__title">字段映射管理</h3>
+          <p className="settings-card__desc">
+            管理导入字段对齐、值转换与默认值配置
+          </p>
+          <ul className="settings-card__list">
+            <li>字段别名映射</li>
+            <li>默认值填充</li>
+            <li>值转换规则</li>
+            <li>规则优先级与启停</li>
+          </ul>
+        </Link>
+
         <Link to="/settings/spec-family" className="settings-card">
           <span className="settings-card__icon">📦</span>
           <h3 className="settings-card__title">规格族管理</h3>

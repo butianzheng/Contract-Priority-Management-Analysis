@@ -1,6 +1,6 @@
 [package]
 name = "dpm-app"
-version = "0.1.0"
+version = "0.2.0"
 description = "合同动态优先级管理系统"
 authors = ["DPM Team"]
 license = ""

@@ -1,9 +1,23 @@
-use crate::db::{self, ContractPriority, InterventionLog, ScoringConfigItem, ConfigChangeLog, FilterPreset, BatchOperation, UnifiedHistoryEntry, Contract, Customer, ProcessDifficulty, StrategyWeights, PriorityExplain};
+use crate::db::{
+    self, BatchOperation, ConfigChangeLog, Contract, ContractPriority, Customer, FilterPreset,
+    InterventionLog, PriorityExplain, ProcessDifficulty, ScoringConfigItem, StrategyWeights,
+    UnifiedHistoryEntry,
+};
 // Phase 16: 会议驾驶舱类型导入
-use crate::db::{MeetingSnapshot, MeetingSnapshotSummary, MeetingKpiConfig, RiskContractFlag, RankingChangeDetail, ConsensusTemplate, MeetingActionItem};
-use crate::scoring::{self, SScoreInput, PScoreInput, generate_s_score_explain, generate_p_score_explain_with_aggregation};
-use crate::config::{self, StrategyScoringWeights};  // 🆕 导入配置模块
-use crate::io::{self, FileFormat, ImportDataType, ConflictStrategy, ImportPreview, ImportResult, ExportOptions, ExportResult, ConflictRecord};
+use crate::config::{self, StrategyScoringWeights}; // 🆕 导入配置模块
+use crate::db::{
+    ConsensusTemplate, MeetingActionItem, MeetingKpiConfig, MeetingSnapshot,
+    MeetingSnapshotSummary, RankingChangeDetail, RiskContractFlag,
+};
+use crate::io::{
+    self, ConflictRecord, ConflictStrategy, ExportOptions, ExportResult, FileFormat,
+    ImportDataType, ImportPreview, ImportResult,
+};
+use crate::scoring::{
+    self, generate_p_score_explain_with_aggregation, generate_s_score_explain, PScoreInput,
+    SScoreInput,
+};
+use std::collections::HashMap;
 
 /// 计算单个合同的优先级
 #[tauri::command]
@@ -15,7 +29,10 @@ pub async fn compute_priority(contract_id: String, strategy: String) -> Result<f
     let customer = match db::get_customer(&contract.customer_id) {
         Ok(c) => c,
         Err(err) => {
-            eprintln!("Warning: customer '{}' missing ({}), using default level C", contract.customer_id, err);
+            eprintln!(
+                "Warning: customer '{}' missing ({}), using default level C",
+                contract.customer_id, err
+            );
             db::Customer {
                 customer_id: contract.customer_id.clone(),
                 customer_name: None,
@@ -41,7 +58,13 @@ pub async fn compute_priority(contract_id: String, strategy: String) -> Result<f
         margin: contract.margin,
         days_to_pdd: contract.days_to_pdd,
     };
-    let s_score = scoring::calc_s_score(s_input, s_weights.w1, s_weights.w2, s_weights.w3, &scoring_config);
+    let s_score = scoring::calc_s_score(
+        s_input,
+        s_weights.w1,
+        s_weights.w2,
+        s_weights.w3,
+        &scoring_config,
+    );
 
     // 7. 🆕 获取合同的聚合统计
     let aggregation_stats = db::get_contract_aggregation_stats(
@@ -61,7 +84,7 @@ pub async fn compute_priority(contract_id: String, strategy: String) -> Result<f
         thickness: contract.thickness,
         width: contract.width,
         spec_family: contract.spec_family,
-        days_to_pdd: contract.days_to_pdd,  // P3 输入：节拍匹配
+        days_to_pdd: contract.days_to_pdd, // P3 输入：节拍匹配
     };
     let p_score = scoring::calc_p_score_with_aggregation(
         p_input,
@@ -111,10 +134,14 @@ pub async fn compute_all_priorities(strategy: String) -> Result<Vec<ContractPrio
 
     for contract in contracts {
         // 🔥 优化：从 HashMap 获取客户数据（O(1) 查找）
-        let customer = customers_map.get(&contract.customer_id)
+        let customer = customers_map
+            .get(&contract.customer_id)
             .cloned()
             .unwrap_or_else(|| {
-                eprintln!("Warning: customer '{}' missing, using default level C", contract.customer_id);
+                eprintln!(
+                    "Warning: customer '{}' missing, using default level C",
+                    contract.customer_id
+                );
                 db::Customer {
                     customer_id: contract.customer_id.clone(),
                     customer_name: None,
@@ -130,7 +157,13 @@ pub async fn compute_all_priorities(strategy: String) -> Result<Vec<ContractPrio
             margin: contract.margin,
             days_to_pdd: contract.days_to_pdd,
         };
-        let s_score = scoring::calc_s_score(s_input, s_weights.w1, s_weights.w2, s_weights.w3, &scoring_config);
+        let s_score = scoring::calc_s_score(
+            s_input,
+            s_weights.w1,
+            s_weights.w2,
+            s_weights.w3,
+            &scoring_config,
+        );
 
         // 计算 P-Score（使用配置化参数 + 聚合统计）
         // 静态规则：仅使用合同属性、配置表数据和合同池快照
@@ -139,7 +172,7 @@ pub async fn compute_all_priorities(strategy: String) -> Result<Vec<ContractPrio
             thickness: contract.thickness,
             width: contract.width,
             spec_family: contract.spec_family.clone(),
-            days_to_pdd: contract.days_to_pdd,  // P3 输入：节拍匹配
+            days_to_pdd: contract.days_to_pdd, // P3 输入：节拍匹配
         };
 
         // 🆕 使用新的 P-Score 计算接口（带聚合统计）
@@ -198,10 +231,7 @@ pub async fn set_alpha(
 ) -> Result<(), String> {
     // 验证 Alpha 范围
     if alpha < 0.5 || alpha > 2.0 {
-        return Err(format!(
-            "Alpha 值必须在 0.5 ~ 2.0 之间，当前值: {}",
-            alpha
-        ));
+        return Err(format!("Alpha 值必须在 0.5 ~ 2.0 之间，当前值: {}", alpha));
     }
 
     // 验证调整原因不能为空
@@ -361,10 +391,7 @@ pub async fn batch_adjust_alpha(
 ) -> Result<i64, String> {
     // 验证 Alpha 范围
     if alpha < 0.5 || alpha > 2.0 {
-        return Err(format!(
-            "Alpha 值必须在 0.5 ~ 2.0 之间，当前值: {}",
-            alpha
-        ));
+        return Err(format!("Alpha 值必须在 0.5 ~ 2.0 之间，当前值: {}", alpha));
     }
 
     // 验证调整原因不能为空
@@ -408,16 +435,63 @@ pub async fn get_unified_history(
     user: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<UnifiedHistoryEntry>, String> {
-    db::get_unified_history(
-        entry_type.as_deref(),
-        user.as_deref(),
-        limit,
-    )
+    db::get_unified_history(entry_type.as_deref(), user.as_deref(), limit)
 }
 
 // ============================================
 // 导入/导出相关命令
 // ============================================
+
+/// 解析文件头（获取源列名）
+#[tauri::command]
+pub async fn parse_file_headers(
+    file_path: String,
+    format: FileFormat,
+) -> Result<Vec<String>, String> {
+    let content = std::fs::read(&file_path).map_err(|e| format!("读取文件失败: {}", e))?;
+    io::GenericParser::parse_headers(&content, format)
+}
+
+/// 获取目标字段定义
+#[tauri::command]
+pub async fn get_target_fields(
+    data_type: ImportDataType,
+) -> Result<Vec<io::TargetFieldDef>, String> {
+    Ok(io::FieldMapper::get_target_fields(data_type))
+}
+
+/// 自动推断字段映射
+#[tauri::command]
+pub async fn auto_detect_mapping(
+    file_path: String,
+    format: FileFormat,
+    data_type: ImportDataType,
+) -> Result<io::FieldMappingResult, String> {
+    let content = std::fs::read(&file_path).map_err(|e| format!("读取文件失败: {}", e))?;
+    let headers = io::GenericParser::parse_headers(&content, format)?;
+    let targets = io::FieldMapper::get_target_fields(data_type);
+    let rules = io::FieldMapper::load_rules(io::import_pipeline::ImportPipeline::data_type_key(
+        data_type,
+    ))
+    .unwrap_or_default();
+    Ok(io::FieldMapper::auto_match(&headers, &targets, &rules))
+}
+
+/// 验证转换表达式语法
+#[tauri::command]
+pub async fn validate_expression(expression: String) -> Result<bool, String> {
+    io::ExpressionEngine::validate(&expression)?;
+    Ok(true)
+}
+
+/// 测试转换表达式（用样本数据）
+#[tauri::command]
+pub async fn test_expression(
+    expression: String,
+    sample_row: HashMap<String, String>,
+) -> Result<String, String> {
+    io::ExpressionEngine::evaluate_str(&expression, &sample_row)
+}
 
 /// 预览导入文件
 #[tauri::command]
@@ -425,72 +499,18 @@ pub async fn preview_import(
     file_path: String,
     data_type: ImportDataType,
     format: FileFormat,
+    field_mapping: Option<HashMap<String, String>>,
+    value_transforms: Option<HashMap<String, serde_json::Value>>,
 ) -> Result<ImportPreview, String> {
-    // 1. 读取文件内容
-    let content = std::fs::read(&file_path)
-        .map_err(|e| format!("读取文件失败: {}", e))?;
+    let content = std::fs::read(&file_path).map_err(|e| format!("读取文件失败: {}", e))?;
 
-    // 2. 根据格式和类型解析数据
-    let (total_rows, valid_rows, errors, conflicts, sample_data) = match (data_type, format) {
-        (ImportDataType::Contracts, FileFormat::Csv) => {
-            let (contracts, errors) = io::CsvHandler::parse_contracts(&content)?;
-            let conflicts = io::ConflictHandler::detect_contract_conflicts(&contracts)?;
-            let sample: Vec<serde_json::Value> = contracts.iter().take(5)
-                .map(|c| serde_json::to_value(c).unwrap_or_default())
-                .collect();
-            (contracts.len() + errors.len(), contracts.len(), errors, conflicts, sample)
-        }
-        (ImportDataType::Contracts, FileFormat::Json) => {
-            let (contracts, errors) = io::JsonHandler::parse_contracts(&content)?;
-            let conflicts = io::ConflictHandler::detect_contract_conflicts(&contracts)?;
-            let sample: Vec<serde_json::Value> = contracts.iter().take(5)
-                .map(|c| serde_json::to_value(c).unwrap_or_default())
-                .collect();
-            (contracts.len() + errors.len(), contracts.len(), errors, conflicts, sample)
-        }
-        (ImportDataType::Contracts, FileFormat::Excel) => {
-            let (contracts, errors) = io::ExcelHandler::parse_contracts(&content)?;
-            let conflicts = io::ConflictHandler::detect_contract_conflicts(&contracts)?;
-            let sample: Vec<serde_json::Value> = contracts.iter().take(5)
-                .map(|c| serde_json::to_value(c).unwrap_or_default())
-                .collect();
-            (contracts.len() + errors.len(), contracts.len(), errors, conflicts, sample)
-        }
-        (ImportDataType::Customers, FileFormat::Csv) => {
-            let (customers, errors) = io::CsvHandler::parse_customers(&content)?;
-            let conflicts = io::ConflictHandler::detect_customer_conflicts(&customers)?;
-            let sample: Vec<serde_json::Value> = customers.iter().take(5)
-                .map(|c| serde_json::to_value(c).unwrap_or_default())
-                .collect();
-            (customers.len() + errors.len(), customers.len(), errors, conflicts, sample)
-        }
-        (ImportDataType::Customers, FileFormat::Json) => {
-            let (customers, errors) = io::JsonHandler::parse_customers(&content)?;
-            let conflicts = io::ConflictHandler::detect_customer_conflicts(&customers)?;
-            let sample: Vec<serde_json::Value> = customers.iter().take(5)
-                .map(|c| serde_json::to_value(c).unwrap_or_default())
-                .collect();
-            (customers.len() + errors.len(), customers.len(), errors, conflicts, sample)
-        }
-        (ImportDataType::Customers, FileFormat::Excel) => {
-            let (customers, errors) = io::ExcelHandler::parse_customers(&content)?;
-            let conflicts = io::ConflictHandler::detect_customer_conflicts(&customers)?;
-            let sample: Vec<serde_json::Value> = customers.iter().take(5)
-                .map(|c| serde_json::to_value(c).unwrap_or_default())
-                .collect();
-            (customers.len() + errors.len(), customers.len(), errors, conflicts, sample)
-        }
-        _ => return Err("不支持的数据类型和格式组合".to_string()),
-    };
-
-    Ok(ImportPreview {
-        total_rows,
-        valid_rows,
-        error_rows: errors.len(),
-        conflicts,
-        validation_errors: errors,
-        sample_data,
-    })
+    io::import_pipeline::ImportPipeline::preview(
+        &content,
+        format,
+        data_type,
+        field_mapping,
+        value_transforms,
+    )
 }
 
 /// 执行导入
@@ -501,55 +521,221 @@ pub async fn execute_import(
     format: FileFormat,
     conflict_strategy: ConflictStrategy,
     conflict_decisions: Option<Vec<ConflictRecord>>,
+    field_mapping: Option<HashMap<String, String>>,
+    value_transforms: Option<HashMap<String, serde_json::Value>>,
 ) -> Result<ImportResult, String> {
-    // 1. 读取文件
-    let content = std::fs::read(&file_path)
-        .map_err(|e| format!("读取文件失败: {}", e))?;
+    let file_name = std::path::Path::new(&file_path)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("unknown")
+        .to_string();
+    let file_size = std::fs::metadata(&file_path).ok().map(|m| m.len() as i64);
 
-    // 2. 解析数据
-    match data_type {
-        ImportDataType::Contracts => {
-            let (contracts, errors) = match format {
-                FileFormat::Csv => io::CsvHandler::parse_contracts(&content)?,
-                FileFormat::Json => io::JsonHandler::parse_contracts(&content)?,
-                FileFormat::Excel => io::ExcelHandler::parse_contracts(&content)?,
-            };
+    let audit_id = db::create_import_audit(
+        io::import_pipeline::ImportPipeline::data_type_key(data_type),
+        &file_name,
+        file_format_to_str(format),
+        None,
+        file_size,
+        conflict_strategy_to_str(conflict_strategy),
+        "system",
+    )?;
 
+    let content = std::fs::read(&file_path).map_err(|e| format!("读取文件失败: {}", e))?;
+
+    let prepared = match io::import_pipeline::ImportPipeline::prepare(
+        &content,
+        format,
+        data_type,
+        field_mapping,
+        value_transforms,
+    ) {
+        Ok(v) => v,
+        Err(e) => {
+            let _ = db::update_import_audit_status(
+                audit_id,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                "failed",
+                Some(&e),
+                None,
+                None,
+            );
+            return Err(e);
+        }
+    };
+
+    for conflict in &prepared.conflicts {
+        let existing_data = serde_json::to_string(&conflict.existing_data).unwrap_or_default();
+        let new_data = serde_json::to_string(&conflict.new_data).unwrap_or_default();
+        let _ = db::log_import_conflict(
+            audit_id,
+            conflict.row_number as i64,
+            &conflict.primary_key,
+            &existing_data,
+            &new_data,
+            None,
+            None,
+        );
+    }
+
+    let total_rows = prepared.total_rows as i64;
+    let valid_rows = prepared.valid_rows as i64;
+    let conflict_rows = prepared.conflicts.len() as i64;
+    let errors = prepared.validation_errors;
+    let error_count_pre = errors.len() as i64;
+
+    let import_exec: Result<(ImportResult, usize), String> = match prepared.records {
+        io::import_pipeline::PreparedRecords::Contracts(contracts) => {
             if !errors.is_empty() && contracts.is_empty() {
-                return Ok(ImportResult {
+                let result = ImportResult {
                     success: false,
                     imported_count: 0,
                     skipped_count: 0,
                     error_count: errors.len(),
                     errors,
                     message: "数据验证失败，无有效数据可导入".to_string(),
-                });
+                };
+                Ok((result, 0usize))
+            } else {
+                import_contracts_with_conflict(
+                    &contracts,
+                    conflict_strategy,
+                    conflict_decisions,
+                    errors,
+                    Some(audit_id),
+                )
             }
-
-            // 执行导入
-            import_contracts_with_conflict(&contracts, conflict_strategy, conflict_decisions, errors)
         }
-        ImportDataType::Customers => {
-            let (customers, errors) = match format {
-                FileFormat::Csv => io::CsvHandler::parse_customers(&content)?,
-                FileFormat::Json => io::JsonHandler::parse_customers(&content)?,
-                FileFormat::Excel => io::ExcelHandler::parse_customers(&content)?,
-            };
-
+        io::import_pipeline::PreparedRecords::Customers(customers) => {
             if !errors.is_empty() && customers.is_empty() {
-                return Ok(ImportResult {
+                let result = ImportResult {
                     success: false,
                     imported_count: 0,
                     skipped_count: 0,
                     error_count: errors.len(),
                     errors,
                     message: "数据验证失败，无有效数据可导入".to_string(),
-                });
+                };
+                Ok((result, 0usize))
+            } else {
+                import_customers_with_conflict(
+                    &customers,
+                    conflict_strategy,
+                    conflict_decisions,
+                    errors,
+                    Some(audit_id),
+                )
             }
-
-            import_customers_with_conflict(&customers, conflict_strategy, conflict_decisions, errors)
         }
-        _ => Err("暂不支持的数据类型".to_string()),
+        io::import_pipeline::PreparedRecords::ProcessDifficulty(items) => {
+            if !errors.is_empty() && items.is_empty() {
+                let result = ImportResult {
+                    success: false,
+                    imported_count: 0,
+                    skipped_count: 0,
+                    error_count: errors.len(),
+                    errors,
+                    message: "数据验证失败，无有效数据可导入".to_string(),
+                };
+                Ok((result, 0usize))
+            } else {
+                import_process_difficulty_with_conflict(
+                    items.as_slice(),
+                    conflict_strategy,
+                    conflict_decisions,
+                    errors,
+                    Some(audit_id),
+                )
+            }
+        }
+        io::import_pipeline::PreparedRecords::StrategyWeights(items) => {
+            if !errors.is_empty() && items.is_empty() {
+                let result = ImportResult {
+                    success: false,
+                    imported_count: 0,
+                    skipped_count: 0,
+                    error_count: errors.len(),
+                    errors,
+                    message: "数据验证失败，无有效数据可导入".to_string(),
+                };
+                Ok((result, 0usize))
+            } else {
+                import_strategy_weights_with_conflict(
+                    items.as_slice(),
+                    conflict_strategy,
+                    conflict_decisions,
+                    errors,
+                    Some(audit_id),
+                )
+            }
+        }
+    };
+
+    let (result, updated_count) = match import_exec {
+        Ok(v) => v,
+        Err(e) => {
+            let _ = db::update_import_audit_status(
+                audit_id,
+                total_rows,
+                valid_rows,
+                error_count_pre,
+                conflict_rows,
+                0,
+                0,
+                0,
+                "failed",
+                Some(&e),
+                None,
+                None,
+            );
+            return Err(e);
+        }
+    };
+    let validation_errors_json = serde_json::to_string(&result.errors).ok();
+
+    let status = if result.success { "success" } else { "failed" };
+    let error_message = if result.success {
+        None
+    } else {
+        Some(result.message.as_str())
+    };
+
+    let _ = db::update_import_audit_status(
+        audit_id,
+        total_rows,
+        valid_rows,
+        result.error_count as i64,
+        conflict_rows,
+        result.imported_count as i64,
+        updated_count as i64,
+        result.skipped_count as i64,
+        status,
+        error_message,
+        validation_errors_json.as_deref(),
+        None,
+    );
+
+    Ok(result)
+}
+
+fn file_format_to_str(format: FileFormat) -> &'static str {
+    match format {
+        FileFormat::Csv => "csv",
+        FileFormat::Json => "json",
+        FileFormat::Excel => "excel",
+    }
+}
+
+fn conflict_strategy_to_str(strategy: ConflictStrategy) -> &'static str {
+    match strategy {
+        ConflictStrategy::Skip => "skip",
+        ConflictStrategy::Overwrite => "overwrite",
     }
 }
 
@@ -558,17 +744,19 @@ fn import_contracts_with_conflict(
     strategy: ConflictStrategy,
     decisions: Option<Vec<ConflictRecord>>,
     parse_errors: Vec<io::ValidationError>,
-) -> Result<ImportResult, String> {
+    audit_id: Option<i64>,
+) -> Result<(ImportResult, usize), String> {
     let mut imported = 0;
     let mut skipped = 0;
+    let mut updated = 0;
 
     for contract in contracts {
-        // 检查是否存在
-        let exists = db::get_contract_optional(&contract.contract_id)?.is_some();
+        let existing = db::get_contract_optional(&contract.contract_id)?;
+        let exists = existing.is_some();
 
         let should_import = if exists {
-            // 查找用户决策
-            let user_decision = decisions.as_ref()
+            let user_decision = decisions
+                .as_ref()
                 .and_then(|d| d.iter().find(|r| r.primary_key == contract.contract_id))
                 .and_then(|r| r.action);
 
@@ -583,8 +771,32 @@ fn import_contracts_with_conflict(
         if should_import {
             if exists {
                 db::update_contract(contract)?;
+                updated += 1;
+                if let (Some(id), Some(before)) = (audit_id, existing.as_ref()) {
+                    let before_data = serde_json::to_string(before).ok();
+                    let after_data = serde_json::to_string(contract).ok();
+                    let _ = db::save_import_snapshot(
+                        id,
+                        "contracts",
+                        &contract.contract_id,
+                        "update",
+                        before_data.as_deref(),
+                        after_data.as_deref(),
+                    );
+                }
             } else {
                 db::insert_contract(contract)?;
+                if let Some(id) = audit_id {
+                    let after_data = serde_json::to_string(contract).ok();
+                    let _ = db::save_import_snapshot(
+                        id,
+                        "contracts",
+                        &contract.contract_id,
+                        "insert",
+                        None,
+                        after_data.as_deref(),
+                    );
+                }
             }
             imported += 1;
         } else {
@@ -592,14 +804,17 @@ fn import_contracts_with_conflict(
         }
     }
 
-    Ok(ImportResult {
-        success: true,
-        imported_count: imported,
-        skipped_count: skipped,
-        error_count: parse_errors.len(),
-        errors: parse_errors,
-        message: format!("导入完成：成功 {} 条，跳过 {} 条", imported, skipped),
-    })
+    Ok((
+        ImportResult {
+            success: true,
+            imported_count: imported,
+            skipped_count: skipped,
+            error_count: parse_errors.len(),
+            errors: parse_errors,
+            message: format!("导入完成：成功 {} 条，跳过 {} 条", imported, skipped),
+        },
+        updated,
+    ))
 }
 
 fn import_customers_with_conflict(
@@ -607,15 +822,19 @@ fn import_customers_with_conflict(
     strategy: ConflictStrategy,
     decisions: Option<Vec<ConflictRecord>>,
     parse_errors: Vec<io::ValidationError>,
-) -> Result<ImportResult, String> {
+    audit_id: Option<i64>,
+) -> Result<(ImportResult, usize), String> {
     let mut imported = 0;
     let mut skipped = 0;
+    let mut updated = 0;
 
     for customer in customers {
-        let exists = db::get_customer_optional(&customer.customer_id)?.is_some();
+        let existing = db::get_customer_optional(&customer.customer_id)?;
+        let exists = existing.is_some();
 
         let should_import = if exists {
-            let user_decision = decisions.as_ref()
+            let user_decision = decisions
+                .as_ref()
                 .and_then(|d| d.iter().find(|r| r.primary_key == customer.customer_id))
                 .and_then(|r| r.action);
 
@@ -630,8 +849,32 @@ fn import_customers_with_conflict(
         if should_import {
             if exists {
                 db::update_customer(customer)?;
+                updated += 1;
+                if let (Some(id), Some(before)) = (audit_id, existing.as_ref()) {
+                    let before_data = serde_json::to_string(before).ok();
+                    let after_data = serde_json::to_string(customer).ok();
+                    let _ = db::save_import_snapshot(
+                        id,
+                        "customers",
+                        &customer.customer_id,
+                        "update",
+                        before_data.as_deref(),
+                        after_data.as_deref(),
+                    );
+                }
             } else {
                 db::insert_customer(customer)?;
+                if let Some(id) = audit_id {
+                    let after_data = serde_json::to_string(customer).ok();
+                    let _ = db::save_import_snapshot(
+                        id,
+                        "customers",
+                        &customer.customer_id,
+                        "insert",
+                        None,
+                        after_data.as_deref(),
+                    );
+                }
             }
             imported += 1;
         } else {
@@ -639,14 +882,205 @@ fn import_customers_with_conflict(
         }
     }
 
-    Ok(ImportResult {
-        success: true,
-        imported_count: imported,
-        skipped_count: skipped,
-        error_count: parse_errors.len(),
-        errors: parse_errors,
-        message: format!("导入完成：成功 {} 条，跳过 {} 条", imported, skipped),
-    })
+    Ok((
+        ImportResult {
+            success: true,
+            imported_count: imported,
+            skipped_count: skipped,
+            error_count: parse_errors.len(),
+            errors: parse_errors,
+            message: format!("导入完成：成功 {} 条，跳过 {} 条", imported, skipped),
+        },
+        updated,
+    ))
+}
+
+fn import_process_difficulty_with_conflict(
+    items: &[ProcessDifficulty],
+    strategy: ConflictStrategy,
+    decisions: Option<Vec<ConflictRecord>>,
+    parse_errors: Vec<io::ValidationError>,
+    audit_id: Option<i64>,
+) -> Result<(ImportResult, usize), String> {
+    let mut imported = 0;
+    let mut skipped = 0;
+    let mut updated = 0;
+
+    for item in items {
+        let natural_key = io::ConflictHandler::process_difficulty_natural_key(item);
+        let (existing, primary_key) = if item.id > 0 {
+            if let Some(existing) = db::get_process_difficulty_optional_by_id(item.id)? {
+                (
+                    Some(existing),
+                    io::ConflictHandler::process_difficulty_id_key(item.id),
+                )
+            } else if let Some(existing) = db::get_process_difficulty_optional_by_key(
+                &item.steel_grade,
+                item.thickness_min,
+                item.thickness_max,
+                item.width_min,
+                item.width_max,
+            )? {
+                (Some(existing), natural_key.clone())
+            } else {
+                (None, natural_key.clone())
+            }
+        } else if let Some(existing) = db::get_process_difficulty_optional_by_key(
+            &item.steel_grade,
+            item.thickness_min,
+            item.thickness_max,
+            item.width_min,
+            item.width_max,
+        )? {
+            (Some(existing), natural_key.clone())
+        } else {
+            (None, natural_key.clone())
+        };
+
+        let exists = existing.is_some();
+        let should_import = if exists {
+            let user_decision = decisions
+                .as_ref()
+                .and_then(|d| d.iter().find(|r| r.primary_key == primary_key))
+                .and_then(|r| r.action);
+
+            match user_decision.unwrap_or(strategy) {
+                ConflictStrategy::Skip => false,
+                ConflictStrategy::Overwrite => true,
+            }
+        } else {
+            true
+        };
+
+        if !should_import {
+            skipped += 1;
+            continue;
+        }
+
+        if let Some(before) = existing {
+            let mut updated_item = item.clone();
+            updated_item.id = before.id;
+            db::update_process_difficulty(&updated_item)?;
+            updated += 1;
+            imported += 1;
+
+            if let Some(id) = audit_id {
+                let before_data = serde_json::to_string(&before).ok();
+                let after_data = serde_json::to_string(&updated_item).ok();
+                let _ = db::save_import_snapshot(
+                    id,
+                    "process_difficulty",
+                    &primary_key,
+                    "update",
+                    before_data.as_deref(),
+                    after_data.as_deref(),
+                );
+            }
+        } else {
+            db::insert_process_difficulty(item)?;
+            imported += 1;
+
+            if let Some(id) = audit_id {
+                let after_data = serde_json::to_string(item).ok();
+                let _ = db::save_import_snapshot(
+                    id,
+                    "process_difficulty",
+                    &primary_key,
+                    "insert",
+                    None,
+                    after_data.as_deref(),
+                );
+            }
+        }
+    }
+
+    Ok((
+        ImportResult {
+            success: true,
+            imported_count: imported,
+            skipped_count: skipped,
+            error_count: parse_errors.len(),
+            errors: parse_errors,
+            message: format!("导入完成：成功 {} 条，跳过 {} 条", imported, skipped),
+        },
+        updated,
+    ))
+}
+
+fn import_strategy_weights_with_conflict(
+    items: &[StrategyWeights],
+    strategy: ConflictStrategy,
+    decisions: Option<Vec<ConflictRecord>>,
+    parse_errors: Vec<io::ValidationError>,
+    audit_id: Option<i64>,
+) -> Result<(ImportResult, usize), String> {
+    let mut imported = 0;
+    let mut skipped = 0;
+    let mut updated = 0;
+
+    for item in items {
+        let existing = db::get_strategy_weight_optional(&item.strategy_name)?;
+        let exists = existing.is_some();
+
+        let should_import = if exists {
+            let user_decision = decisions
+                .as_ref()
+                .and_then(|d| d.iter().find(|r| r.primary_key == item.strategy_name))
+                .and_then(|r| r.action);
+
+            match user_decision.unwrap_or(strategy) {
+                ConflictStrategy::Skip => false,
+                ConflictStrategy::Overwrite => true,
+            }
+        } else {
+            true
+        };
+
+        if !should_import {
+            skipped += 1;
+            continue;
+        }
+
+        db::upsert_strategy_weight(
+            &item.strategy_name,
+            item.ws,
+            item.wp,
+            item.description.as_deref(),
+        )?;
+
+        if exists {
+            updated += 1;
+        }
+        imported += 1;
+
+        if let Some(id) = audit_id {
+            let before_data = existing
+                .as_ref()
+                .and_then(|v| serde_json::to_string(v).ok());
+            let after_data = serde_json::to_string(item).ok();
+            let action = if exists { "update" } else { "insert" };
+            let _ = db::save_import_snapshot(
+                id,
+                "strategy_weights",
+                &item.strategy_name,
+                action,
+                before_data.as_deref(),
+                after_data.as_deref(),
+            );
+        }
+    }
+
+    Ok((
+        ImportResult {
+            success: true,
+            imported_count: imported,
+            skipped_count: skipped,
+            error_count: parse_errors.len(),
+            errors: parse_errors,
+            message: format!("导入完成：成功 {} 条，跳过 {} 条", imported, skipped),
+        },
+        updated,
+    ))
 }
 
 /// 导出数据
@@ -705,8 +1139,7 @@ pub async fn export_data(
     };
 
     // 写入文件
-    std::fs::write(&file_path, &content)
-        .map_err(|e| format!("写入文件失败: {}", e))?;
+    std::fs::write(&file_path, &content).map_err(|e| format!("写入文件失败: {}", e))?;
 
     Ok(ExportResult {
         success: true,
@@ -732,7 +1165,9 @@ pub async fn get_process_difficulty() -> Result<Vec<ProcessDifficulty>, String> 
 // Phase 8: 清洗规则管理命令
 // ============================================
 
-use crate::db::schema::{TransformRule, TransformRuleChangeLog, TransformExecutionLog, RuleTestResult};
+use crate::db::schema::{
+    RuleTestResult, TransformExecutionLog, TransformRule, TransformRuleChangeLog,
+};
 
 /// 获取所有清洗规则
 #[tauri::command]
@@ -742,7 +1177,9 @@ pub async fn get_transform_rules() -> Result<Vec<TransformRule>, String> {
 
 /// 按分类获取清洗规则
 #[tauri::command]
-pub async fn get_transform_rules_by_category(category: String) -> Result<Vec<TransformRule>, String> {
+pub async fn get_transform_rules_by_category(
+    category: String,
+) -> Result<Vec<TransformRule>, String> {
     db::list_transform_rules_by_category(&category)
 }
 
@@ -853,8 +1290,8 @@ pub async fn test_transform_rule(
     let sample_contracts: Vec<_> = contracts.into_iter().take(sample_size).collect();
 
     // 解析规则配置
-    let config: serde_json::Value = serde_json::from_str(&rule.config_json)
-        .map_err(|e| format!("规则配置解析失败: {}", e))?;
+    let config: serde_json::Value =
+        serde_json::from_str(&rule.config_json).map_err(|e| format!("规则配置解析失败: {}", e))?;
 
     // 模拟规则执行（根据规则类型进行不同处理）
     let rule_type = config.get("type").and_then(|v| v.as_str()).unwrap_or("");
@@ -864,10 +1301,12 @@ pub async fn test_transform_rule(
             // 正则替换示例
             let field = config.get("field").and_then(|v| v.as_str()).unwrap_or("");
             let pattern = config.get("pattern").and_then(|v| v.as_str()).unwrap_or("");
-            let replacement = config.get("replacement").and_then(|v| v.as_str()).unwrap_or("");
+            let replacement = config
+                .get("replacement")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
 
-            let regex = regex::Regex::new(pattern)
-                .map_err(|e| format!("正则表达式无效: {}", e))?;
+            let regex = regex::Regex::new(pattern).map_err(|e| format!("正则表达式无效: {}", e))?;
 
             let mut matched = 0i64;
             let mut results: Vec<serde_json::Value> = vec![];
@@ -896,9 +1335,19 @@ pub async fn test_transform_rule(
         }
         "range_classify" => {
             // 范围分类示例
-            let source_field = config.get("source_field").and_then(|v| v.as_str()).unwrap_or("");
-            let target_field = config.get("target_field").and_then(|v| v.as_str()).unwrap_or("");
-            let ranges = config.get("ranges").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+            let source_field = config
+                .get("source_field")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let target_field = config
+                .get("target_field")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let ranges = config
+                .get("ranges")
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default();
 
             let mut results: Vec<serde_json::Value> = vec![];
 
@@ -912,7 +1361,10 @@ pub async fn test_transform_rule(
 
                 for range in &ranges {
                     let min = range.get("min").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                    let max = range.get("max").and_then(|v| v.as_f64()).unwrap_or(f64::MAX);
+                    let max = range
+                        .get("max")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(f64::MAX);
                     let label = range.get("label").and_then(|v| v.as_str()).unwrap_or("");
 
                     if value >= min && value < max {
@@ -931,10 +1383,22 @@ pub async fn test_transform_rule(
         }
         "value_mapping" => {
             // 值映射示例
-            let source_field = config.get("source_field").and_then(|v| v.as_str()).unwrap_or("");
-            let target_field = config.get("target_field").and_then(|v| v.as_str()).unwrap_or("");
-            let mapping = config.get("mapping").cloned().unwrap_or(serde_json::json!({}));
-            let default = config.get("default").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let source_field = config
+                .get("source_field")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let target_field = config
+                .get("target_field")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let mapping = config
+                .get("mapping")
+                .cloned()
+                .unwrap_or(serde_json::json!({}));
+            let default = config
+                .get("default")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
 
             let mut results: Vec<serde_json::Value> = vec![];
 
@@ -953,9 +1417,19 @@ pub async fn test_transform_rule(
         }
         "condition_mapping" => {
             // 条件映射示例
-            let source_field = config.get("source_field").and_then(|v| v.as_str()).unwrap_or("");
-            let target_field = config.get("target_field").and_then(|v| v.as_str()).unwrap_or("");
-            let conditions = config.get("conditions").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+            let source_field = config
+                .get("source_field")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let target_field = config
+                .get("target_field")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let conditions = config
+                .get("conditions")
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default();
             let default_label = config.get("default").and_then(|v| v.as_str()).unwrap_or("");
 
             let mut results: Vec<serde_json::Value> = vec![];
@@ -1002,26 +1476,32 @@ pub async fn test_transform_rule(
         }
         _ => {
             // 未知类型，返回规则配置信息
-            (serde_json::json!({
-                "rule_type": rule_type,
-                "config": config,
-                "note": "未实现的规则类型预览"
-            }), 0)
+            (
+                serde_json::json!({
+                    "rule_type": rule_type,
+                    "config": config,
+                    "note": "未实现的规则类型预览"
+                }),
+                0,
+            )
         }
     };
 
     Ok(RuleTestResult {
         success: true,
-        input_sample: serde_json::json!(sample_contracts.iter().map(|c| {
-            serde_json::json!({
-                "contract_id": c.contract_id,
-                "steel_grade": c.steel_grade,
-                "thickness": c.thickness,
-                "width": c.width,
-                "days_to_pdd": c.days_to_pdd,
-                "margin": c.margin
+        input_sample: serde_json::json!(sample_contracts
+            .iter()
+            .map(|c| {
+                serde_json::json!({
+                    "contract_id": c.contract_id,
+                    "steel_grade": c.steel_grade,
+                    "thickness": c.thickness,
+                    "width": c.width,
+                    "days_to_pdd": c.days_to_pdd,
+                    "margin": c.margin
+                })
             })
-        }).collect::<Vec<_>>()),
+            .collect::<Vec<_>>()),
         output_sample,
         records_matched,
         error_message: None,
@@ -1045,8 +1525,8 @@ pub async fn execute_transform_rule(
     let total_count = contracts.len() as i64;
 
     // 解析规则配置
-    let config: serde_json::Value = serde_json::from_str(&rule.config_json)
-        .map_err(|e| format!("规则配置解析失败: {}", e))?;
+    let config: serde_json::Value =
+        serde_json::from_str(&rule.config_json).map_err(|e| format!("规则配置解析失败: {}", e))?;
 
     let rule_type = config.get("type").and_then(|v| v.as_str()).unwrap_or("");
 
@@ -1058,26 +1538,40 @@ pub async fn execute_transform_rule(
             // 字段标准化类规则
             // 这里应该实现实际的数据修改逻辑
             // 由于涉及数据库写操作，需要谨慎实现
-            (0, "success", Some("标准化规则已记录，实际数据修改需要在事务中执行".to_string()))
+            (
+                0,
+                "success",
+                Some("标准化规则已记录，实际数据修改需要在事务中执行".to_string()),
+            )
         }
         "range_classify" | "spec_family_classify" => {
             // 分类提取类规则
             // 这类规则通常是计算派生字段，可能需要添加新列
-            (0, "success", Some("分类规则预览成功，派生字段计算在优先级计算时动态执行".to_string()))
+            (
+                0,
+                "success",
+                Some("分类规则预览成功，派生字段计算在优先级计算时动态执行".to_string()),
+            )
         }
         "value_mapping" | "range_normalize" => {
             // 归一化类规则
             // 这类规则通常在评分计算时动态应用
-            (0, "success", Some("归一化规则已配置，将在评分计算时应用".to_string()))
+            (
+                0,
+                "success",
+                Some("归一化规则已配置，将在评分计算时应用".to_string()),
+            )
         }
         "condition_mapping" => {
             // 标签映射类规则
             // 这类规则生成派生标签
-            (0, "success", Some("标签映射规则已配置，标签在查询时动态计算".to_string()))
+            (
+                0,
+                "success",
+                Some("标签映射规则已配置，标签在查询时动态计算".to_string()),
+            )
         }
-        _ => {
-            (0, "failed", Some(format!("未知的规则类型: {}", rule_type)))
-        }
+        _ => (0, "failed", Some(format!("未知的规则类型: {}", rule_type))),
     };
 
     // 记录执行日志
@@ -1216,11 +1710,7 @@ pub async fn delete_spec_family(
 
 /// 切换规格族启用/禁用状态
 #[tauri::command]
-pub async fn toggle_spec_family(
-    family_id: i64,
-    enabled: bool,
-    user: String,
-) -> Result<(), String> {
+pub async fn toggle_spec_family(family_id: i64, enabled: bool, user: String) -> Result<(), String> {
     db::toggle_spec_family_enabled(family_id, enabled, &user)
 }
 
@@ -1237,7 +1727,7 @@ pub async fn get_spec_family_history(
 // Phase 10: n日节拍配置管理命令
 // ============================================
 
-use crate::db::schema::{RhythmConfig, RhythmLabel, RhythmConfigChangeLog};
+use crate::db::schema::{RhythmConfig, RhythmConfigChangeLog, RhythmLabel};
 
 /// 获取所有节拍配置
 #[tauri::command]
@@ -1382,7 +1872,10 @@ const DEFAULT_W_P3: f64 = 0.2;
 /// - 计算验证结果
 /// - 最终优先级公式汇总
 #[tauri::command]
-pub async fn explain_priority(contract_id: String, strategy: String) -> Result<PriorityExplain, String> {
+pub async fn explain_priority(
+    contract_id: String,
+    strategy: String,
+) -> Result<PriorityExplain, String> {
     // 1. 获取合同数据
     let contract = db::get_contract(&contract_id)?;
 
@@ -1461,34 +1954,52 @@ pub async fn explain_priority(contract_id: String, strategy: String) -> Result<P
              P-Score = {:.2} × {:.2} + {:.2} × {:.2} + {:.2} × {:.2} = {:.2}\n\
              Base Priority = {:.2} × {:.2} + {:.2} × {:.2} = {:.2}\n\
              Final Priority = {:.2} × {:.3} = {:.2}",
-            s_score_explain.s1_customer_level.score, s_weights.w1,
-            s_score_explain.s2_margin.score, s_weights.w2,
-            s_score_explain.s3_urgency.score, s_weights.w3,
+            s_score_explain.s1_customer_level.score,
+            s_weights.w1,
+            s_score_explain.s2_margin.score,
+            s_weights.w2,
+            s_score_explain.s3_urgency.score,
+            s_weights.w3,
             s_score,
-            p_score_explain.p1_difficulty.score, DEFAULT_W_P1,
-            p_score_explain.p2_aggregation.score, DEFAULT_W_P2,
-            p_score_explain.p3_rhythm.score, DEFAULT_W_P3,
+            p_score_explain.p1_difficulty.score,
+            DEFAULT_W_P1,
+            p_score_explain.p2_aggregation.score,
+            DEFAULT_W_P2,
+            p_score_explain.p3_rhythm.score,
+            DEFAULT_W_P3,
             p_score,
-            s_score, weights.ws,
-            p_score, weights.wp,
+            s_score,
+            weights.ws,
+            p_score,
+            weights.wp,
             base_priority,
-            base_priority, a, final_priority
+            base_priority,
+            a,
+            final_priority
         )
     } else {
         format!(
             "S-Score = {:.2} × {:.2} + {:.2} × {:.2} + {:.2} × {:.2} = {:.2}\n\
              P-Score = {:.2} × {:.2} + {:.2} × {:.2} + {:.2} × {:.2} = {:.2}\n\
              Final Priority = {:.2} × {:.2} + {:.2} × {:.2} = {:.2}",
-            s_score_explain.s1_customer_level.score, s_weights.w1,
-            s_score_explain.s2_margin.score, s_weights.w2,
-            s_score_explain.s3_urgency.score, s_weights.w3,
+            s_score_explain.s1_customer_level.score,
+            s_weights.w1,
+            s_score_explain.s2_margin.score,
+            s_weights.w2,
+            s_score_explain.s3_urgency.score,
+            s_weights.w3,
             s_score,
-            p_score_explain.p1_difficulty.score, DEFAULT_W_P1,
-            p_score_explain.p2_aggregation.score, DEFAULT_W_P2,
-            p_score_explain.p3_rhythm.score, DEFAULT_W_P3,
+            p_score_explain.p1_difficulty.score,
+            DEFAULT_W_P1,
+            p_score_explain.p2_aggregation.score,
+            DEFAULT_W_P2,
+            p_score_explain.p3_rhythm.score,
+            DEFAULT_W_P3,
             p_score,
-            s_score, weights.ws,
-            p_score, weights.wp,
+            s_score,
+            weights.ws,
+            p_score,
+            weights.wp,
             final_priority
         )
     };
@@ -1519,7 +2030,9 @@ pub async fn explain_priority(contract_id: String, strategy: String) -> Result<P
 // Phase 13: 数据校验与质量报告
 // ============================================
 
-use crate::db::{DataQualityReport, MissingValueStrategy, ContractPriorityWithValidation, DefaultValueUsed};
+use crate::db::{
+    ContractPriorityWithValidation, DataQualityReport, DefaultValueUsed, MissingValueStrategy,
+};
 use crate::validation;
 
 /// 获取数据质量报告
@@ -1552,7 +2065,10 @@ pub async fn update_missing_value_strategy(
 ) -> Result<(), String> {
     // 验证策略值
     if !["default", "skip", "error"].contains(&strategy.as_str()) {
-        return Err(format!("无效的策略类型: {}，必须是 default/skip/error", strategy));
+        return Err(format!(
+            "无效的策略类型: {}，必须是 default/skip/error",
+            strategy
+        ));
     }
 
     db::update_missing_value_strategy(
@@ -1608,7 +2124,7 @@ pub async fn compute_all_priorities_with_validation(
                 db::Customer {
                     customer_id: contract.customer_id.clone(),
                     customer_name: None,
-                    customer_level: "C".to_string(),  // 默认最低等级
+                    customer_level: "C".to_string(), // 默认最低等级
                     credit_level: None,
                     customer_group: None,
                 }
@@ -1624,7 +2140,13 @@ pub async fn compute_all_priorities_with_validation(
             margin: contract.margin,
             days_to_pdd: contract.days_to_pdd,
         };
-        let s_score = scoring::calc_s_score(s_input, s_weights.w1, s_weights.w2, s_weights.w3, &scoring_config);
+        let s_score = scoring::calc_s_score(
+            s_input,
+            s_weights.w1,
+            s_weights.w2,
+            s_weights.w3,
+            &scoring_config,
+        );
 
         // 计算 P-Score
         let p_input = PScoreInput {
@@ -1677,7 +2199,8 @@ pub async fn compute_all_priorities_with_validation(
 
     // 按优先级降序排序
     results.sort_by(|a, b| {
-        b.priority_result.priority
+        b.priority_result
+            .priority
             .partial_cmp(&a.priority_result.priority)
             .unwrap()
     });
@@ -1690,8 +2213,8 @@ pub async fn compute_all_priorities_with_validation(
 // ============================================
 
 use crate::db::{
-    StrategyVersion, StrategyVersionSummary, StrategyVersionChangeLog,
-    SandboxSession, SandboxResult, VersionComparison, VersionComparisonItem,
+    SandboxResult, SandboxSession, StrategyVersion, StrategyVersionChangeLog,
+    StrategyVersionSummary, VersionComparison, VersionComparisonItem,
 };
 
 /// 创建策略版本快照
@@ -1720,7 +2243,9 @@ pub async fn create_strategy_version(
 
 /// 获取策略的版本列表
 #[tauri::command]
-pub async fn get_strategy_versions(strategy_name: String) -> Result<Vec<StrategyVersionSummary>, String> {
+pub async fn get_strategy_versions(
+    strategy_name: String,
+) -> Result<Vec<StrategyVersionSummary>, String> {
     db::list_strategy_versions(&strategy_name)
 }
 
@@ -1732,7 +2257,9 @@ pub async fn get_strategy_version(version_id: i64) -> Result<StrategyVersion, St
 
 /// 获取策略的当前激活版本
 #[tauri::command]
-pub async fn get_active_strategy_version(strategy_name: String) -> Result<Option<StrategyVersion>, String> {
+pub async fn get_active_strategy_version(
+    strategy_name: String,
+) -> Result<Option<StrategyVersion>, String> {
     db::get_active_strategy_version(&strategy_name)
 }
 
@@ -1798,7 +2325,12 @@ pub async fn create_sandbox_session(
     description: Option<String>,
     user: String,
 ) -> Result<i64, String> {
-    db::create_sandbox_session(&session_name, strategy_version_id, description.as_deref(), &user)
+    db::create_sandbox_session(
+        &session_name,
+        strategy_version_id,
+        description.as_deref(),
+        &user,
+    )
 }
 
 /// 获取沙盘会话列表
@@ -1836,8 +2368,7 @@ pub async fn run_sandbox_calculation(session_id: i64) -> Result<i64, String> {
 
     // 5. 加载 P2 曲线配置（如果有快照）
     let p2_curve_config = if let Some(ref snapshot) = version.p2_curve_config_snapshot {
-        serde_json::from_str(snapshot)
-            .map_err(|e| format!("解析 P2 曲线配置快照失败: {}", e))?
+        serde_json::from_str(snapshot).map_err(|e| format!("解析 P2 曲线配置快照失败: {}", e))?
     } else {
         db::P2CurveConfig::default()
     };
@@ -1861,7 +2392,7 @@ pub async fn run_sandbox_calculation(session_id: i64) -> Result<i64, String> {
                 customer_level: "C".to_string(),
                 credit_level: None,
                 customer_group: None,
-            }
+            },
         };
 
         // 计算 S-Score（使用版本中的权重）
@@ -1985,16 +2516,18 @@ pub async fn compare_strategy_versions(
     let scoring_config_struct_b = config::build_scoring_config_from_map(&scoring_config_b)?;
 
     // 4. 加载 P2 曲线配置
-    let p2_curve_config_a: db::P2CurveConfig = if let Some(ref snapshot) = version_a.p2_curve_config_snapshot {
-        serde_json::from_str(snapshot).unwrap_or_default()
-    } else {
-        db::P2CurveConfig::default()
-    };
-    let p2_curve_config_b: db::P2CurveConfig = if let Some(ref snapshot) = version_b.p2_curve_config_snapshot {
-        serde_json::from_str(snapshot).unwrap_or_default()
-    } else {
-        db::P2CurveConfig::default()
-    };
+    let p2_curve_config_a: db::P2CurveConfig =
+        if let Some(ref snapshot) = version_a.p2_curve_config_snapshot {
+            serde_json::from_str(snapshot).unwrap_or_default()
+        } else {
+            db::P2CurveConfig::default()
+        };
+    let p2_curve_config_b: db::P2CurveConfig =
+        if let Some(ref snapshot) = version_b.p2_curve_config_snapshot {
+            serde_json::from_str(snapshot).unwrap_or_default()
+        } else {
+            db::P2CurveConfig::default()
+        };
 
     // 5. 批量获取聚合统计
     let aggregation_stats_map = db::get_all_contracts_aggregation_stats()?;
@@ -2149,8 +2682,8 @@ pub async fn get_version_comparison(comparison_id: i64) -> Result<VersionCompari
 // ============================================
 
 use crate::db::schema::{
-    ImportAuditLog, ImportConflictLog, FieldAlignmentRule,
-    DuplicateDetectionConfig, ImportStatistics, SimilarRecordPair,
+    DuplicateDetectionConfig, FieldAlignmentChangeLog, FieldAlignmentRule, ImportAuditLog,
+    ImportConflictLog, ImportStatistics, SimilarRecordPair,
 };
 
 /// 获取导入审计历史
@@ -2188,7 +2721,10 @@ pub async fn resolve_import_conflict(
     user: String,
 ) -> Result<(), String> {
     if !["skip", "overwrite"].contains(&action.as_str()) {
-        return Err(format!("无效的冲突处理动作: {}，必须是 skip 或 overwrite", action));
+        return Err(format!(
+            "无效的冲突处理动作: {}，必须是 skip 或 overwrite",
+            action
+        ));
     }
     db::resolve_import_conflict(conflict_id, &action, action_reason.as_deref(), &user)
 }
@@ -2202,7 +2738,10 @@ pub async fn batch_resolve_import_conflicts(
     user: String,
 ) -> Result<i64, String> {
     if !["skip", "overwrite"].contains(&action.as_str()) {
-        return Err(format!("无效的冲突处理动作: {}，必须是 skip 或 overwrite", action));
+        return Err(format!(
+            "无效的冲突处理动作: {}，必须是 skip 或 overwrite",
+            action
+        ));
     }
     db::batch_resolve_conflicts(audit_id, &action, action_reason.as_deref(), &user)
 }
@@ -2223,8 +2762,50 @@ pub async fn get_import_statistics() -> Result<Vec<ImportStatistics>, String> {
 #[tauri::command]
 pub async fn get_field_alignment_rules(
     data_type: Option<String>,
+    include_disabled: Option<bool>,
 ) -> Result<Vec<FieldAlignmentRule>, String> {
-    db::list_field_alignment_rules(data_type.as_deref())
+    db::list_field_alignment_rules(data_type.as_deref(), include_disabled.unwrap_or(false))
+}
+
+/// 获取字段对齐规则变更日志
+#[tauri::command]
+pub async fn get_field_alignment_change_logs(
+    rule_id: Option<i64>,
+    limit: Option<i64>,
+) -> Result<Vec<FieldAlignmentChangeLog>, String> {
+    db::list_field_alignment_change_logs(rule_id, limit)
+}
+
+/// 保存字段对齐规则（新建或更新）
+#[tauri::command]
+pub async fn save_field_alignment_rule(
+    rule: FieldAlignmentRule,
+    user: String,
+) -> Result<i64, String> {
+    serde_json::from_str::<serde_json::Value>(&rule.field_mapping)
+        .map_err(|e| format!("字段映射 JSON 格式无效: {}", e))?;
+
+    if let Some(ref vt) = rule.value_transform {
+        if !vt.trim().is_empty() {
+            serde_json::from_str::<serde_json::Value>(vt)
+                .map_err(|e| format!("值转换规则 JSON 格式无效: {}", e))?;
+        }
+    }
+
+    if let Some(ref dv) = rule.default_values {
+        if !dv.trim().is_empty() {
+            serde_json::from_str::<serde_json::Value>(dv)
+                .map_err(|e| format!("默认值 JSON 格式无效: {}", e))?;
+        }
+    }
+
+    db::save_field_alignment_rule(&rule, &user)
+}
+
+/// 删除字段对齐规则
+#[tauri::command]
+pub async fn delete_field_alignment_rule(rule_id: i64, user: String) -> Result<(), String> {
+    db::delete_field_alignment_rule(rule_id, &user)
 }
 
 /// 创建字段对齐规则
@@ -2293,7 +2874,10 @@ pub async fn resolve_similar_pair(
     user: String,
 ) -> Result<(), String> {
     if !["confirmed_same", "confirmed_diff", "merged", "ignored"].contains(&status.as_str()) {
-        return Err(format!("无效的状态: {}，必须是 confirmed_same/confirmed_diff/merged/ignored", status));
+        return Err(format!(
+            "无效的状态: {}，必须是 confirmed_same/confirmed_diff/merged/ignored",
+            status
+        ));
     }
     db::resolve_similar_pair(pair_id, &status, resolution_note.as_deref(), &user)
 }
@@ -2332,7 +2916,10 @@ pub async fn create_meeting_snapshot(
 ) -> Result<i64, String> {
     // 验证会议类型
     if !["production_sales", "business"].contains(&meeting_type.as_str()) {
-        return Err(format!("无效的会议类型: {}，必须是 production_sales 或 business", meeting_type));
+        return Err(format!(
+            "无效的会议类型: {}，必须是 production_sales 或 business",
+            meeting_type
+        ));
     }
 
     // 验证 JSON 格式
@@ -2387,7 +2974,10 @@ pub async fn update_meeting_snapshot_status(
 ) -> Result<(), String> {
     // 验证状态值
     if !["draft", "pending", "approved", "archived"].contains(&status.as_str()) {
-        return Err(format!("无效的状态: {}，必须是 draft/pending/approved/archived", status));
+        return Err(format!(
+            "无效的状态: {}，必须是 draft/pending/approved/archived",
+            status
+        ));
     }
 
     db::update_meeting_snapshot_status(snapshot_id, &status, approved_by.as_deref())
@@ -2416,7 +3006,10 @@ pub async fn get_meeting_kpi_configs_by_category(
 ) -> Result<Vec<MeetingKpiConfig>, String> {
     // 验证类别
     if !["leadership", "sales", "production", "finance"].contains(&category.as_str()) {
-        return Err(format!("无效的 KPI 类别: {}，必须是 leadership/sales/production/finance", category));
+        return Err(format!(
+            "无效的 KPI 类别: {}，必须是 leadership/sales/production/finance",
+            category
+        ));
     }
 
     db::list_meeting_kpi_configs_by_category(&category)
@@ -2442,13 +3035,24 @@ pub async fn create_risk_contract_flag(
     action_priority: Option<i64>,
 ) -> Result<i64, String> {
     // 验证风险类型
-    if !["delivery_delay", "customer_downgrade", "margin_loss", "rhythm_mismatch", "other"].contains(&risk_type.as_str()) {
+    if ![
+        "delivery_delay",
+        "customer_downgrade",
+        "margin_loss",
+        "rhythm_mismatch",
+        "other",
+    ]
+    .contains(&risk_type.as_str())
+    {
         return Err(format!("无效的风险类型: {}", risk_type));
     }
 
     // 验证风险等级
     if !["high", "medium", "low"].contains(&risk_level.as_str()) {
-        return Err(format!("无效的风险等级: {}，必须是 high/medium/low", risk_level));
+        return Err(format!(
+            "无效的风险等级: {}，必须是 high/medium/low",
+            risk_level
+        ));
     }
 
     db::create_risk_contract_flag(
@@ -2482,7 +3086,10 @@ pub async fn update_risk_contract_status(
 ) -> Result<(), String> {
     // 验证状态
     if !["open", "in_progress", "resolved", "accepted"].contains(&status.as_str()) {
-        return Err(format!("无效的状态: {}，必须是 open/in_progress/resolved/accepted", status));
+        return Err(format!(
+            "无效的状态: {}，必须是 open/in_progress/resolved/accepted",
+            status
+        ));
     }
 
     db::update_risk_contract_status(flag_id, &status, &handled_by, handling_note.as_deref())
@@ -2600,7 +3207,10 @@ pub async fn update_meeting_action_item_status(
 ) -> Result<(), String> {
     // 验证状态
     if !["open", "in_progress", "completed", "cancelled"].contains(&status.as_str()) {
-        return Err(format!("无效的状态: {}，必须是 open/in_progress/completed/cancelled", status));
+        return Err(format!(
+            "无效的状态: {}，必须是 open/in_progress/completed/cancelled",
+            status
+        ));
     }
 
     // 验证完成率
@@ -2657,7 +3267,8 @@ pub async fn calculate_single_kpi(
 ) -> Result<db::KpiValue, String> {
     // 1. 获取 KPI 配置
     let configs = db::list_meeting_kpi_configs()?;
-    let config = configs.iter()
+    let config = configs
+        .iter()
         .find(|c| c.kpi_code == kpi_code)
         .ok_or_else(|| format!("未找到 KPI 配置: {}", kpi_code))?;
 
@@ -2780,9 +3391,7 @@ pub async fn analyze_customer_protection(
 /// # 返回
 /// 节拍顺行分析结果，包含每日节拍匹配情况和规格族分布
 #[tauri::command]
-pub async fn analyze_rhythm_flow(
-    strategy: String,
-) -> Result<kpi::RhythmFlowAnalysis, String> {
+pub async fn analyze_rhythm_flow(strategy: String) -> Result<kpi::RhythmFlowAnalysis, String> {
     kpi::get_rhythm_flow_analysis(&strategy)
 }
 
@@ -2845,9 +3454,8 @@ pub async fn export_consensus_csv(
     // 2. 配置导出选项
     let config = kpi::CsvExportConfig {
         output_dir,
-        file_prefix: file_prefix.unwrap_or_else(|| {
-            format!("consensus_{}", meeting_date.replace("-", ""))
-        }),
+        file_prefix: file_prefix
+            .unwrap_or_else(|| format!("consensus_{}", meeting_date.replace("-", ""))),
         add_bom: true,
         export_contracts: true,
         export_kpis: true,
@@ -2885,4 +3493,293 @@ pub async fn export_contracts_ranking_csv(
 
     // 2. 导出合同排名
     kpi::export_contracts_ranking_csv(&package, &file_path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::Once;
+
+    static TEST_DB_INIT: Once = Once::new();
+    static UNIQUE_SEQ: AtomicU64 = AtomicU64::new(1);
+
+    fn ensure_test_db() {
+        TEST_DB_INIT.call_once(|| {
+            let context = tauri::generate_context!();
+            if let Err(err) = crate::db::initialize_database(context.config()) {
+                match err {
+                    rusqlite::Error::InvalidQuery => {
+                        // 连接池已初始化时会返回 InvalidQuery，测试可继续。
+                    }
+                    _ => panic!("初始化测试数据库失败: {}", err),
+                }
+            }
+        });
+    }
+
+    fn unique_steel_grade(prefix: &str) -> String {
+        let seq = UNIQUE_SEQ.fetch_add(1, Ordering::Relaxed);
+        format!("UT-{}-{}", prefix, seq)
+    }
+
+    fn unique_strategy_name(prefix: &str) -> String {
+        let seq = UNIQUE_SEQ.fetch_add(1, Ordering::Relaxed);
+        format!("UT-STRATEGY-{}-{}", prefix, seq)
+    }
+
+    fn seed_process_difficulty(
+        steel_grade: &str,
+        thickness_min: f64,
+        thickness_max: f64,
+        width_min: f64,
+        width_max: f64,
+        difficulty_level: &str,
+        difficulty_score: f64,
+    ) -> ProcessDifficulty {
+        let seed = ProcessDifficulty {
+            id: 0,
+            steel_grade: steel_grade.to_string(),
+            thickness_min,
+            thickness_max,
+            width_min,
+            width_max,
+            difficulty_level: difficulty_level.to_string(),
+            difficulty_score,
+        };
+
+        db::insert_process_difficulty(&seed).expect("插入测试工艺难度失败");
+        db::get_process_difficulty_optional_by_key(
+            steel_grade,
+            thickness_min,
+            thickness_max,
+            width_min,
+            width_max,
+        )
+        .expect("查询测试工艺难度失败")
+        .expect("测试工艺难度记录不存在")
+    }
+
+    #[test]
+    fn test_process_difficulty_id_conflict_detection_and_skip() {
+        ensure_test_db();
+
+        let steel_grade = unique_steel_grade("id");
+        let existing = seed_process_difficulty(&steel_grade, 1.0, 2.0, 1000.0, 1200.0, "中", 55.0);
+        let incoming = ProcessDifficulty {
+            id: existing.id,
+            steel_grade: steel_grade.clone(),
+            thickness_min: 1.0,
+            thickness_max: 2.0,
+            width_min: 1000.0,
+            width_max: 1200.0,
+            difficulty_level: "高".to_string(),
+            difficulty_score: 88.0,
+        };
+
+        let conflicts =
+            io::ConflictHandler::detect_process_difficulty_conflicts(&[incoming.clone()])
+                .expect("检测 id 冲突失败");
+        assert_eq!(conflicts.len(), 1);
+        assert_eq!(
+            conflicts[0].primary_key,
+            io::ConflictHandler::process_difficulty_id_key(existing.id)
+        );
+
+        let (result, updated) = import_process_difficulty_with_conflict(
+            &[incoming],
+            ConflictStrategy::Skip,
+            None,
+            vec![],
+            None,
+        )
+        .expect("按 skip 导入失败");
+
+        assert!(result.success);
+        assert_eq!(result.imported_count, 0);
+        assert_eq!(result.skipped_count, 1);
+        assert_eq!(updated, 0);
+
+        let after = db::get_process_difficulty_optional_by_id(existing.id)
+            .expect("按 id 查询失败")
+            .expect("记录不存在");
+        assert_eq!(after.difficulty_score, existing.difficulty_score);
+        assert_eq!(after.difficulty_level, existing.difficulty_level);
+    }
+
+    #[test]
+    fn test_process_difficulty_natural_key_conflict_skip() {
+        ensure_test_db();
+
+        let steel_grade = unique_steel_grade("natural-skip");
+        let existing = seed_process_difficulty(&steel_grade, 1.1, 2.1, 1010.0, 1210.0, "中", 56.0);
+        let incoming = ProcessDifficulty {
+            id: 0,
+            steel_grade: steel_grade.clone(),
+            thickness_min: 1.1,
+            thickness_max: 2.1,
+            width_min: 1010.0,
+            width_max: 1210.0,
+            difficulty_level: "高".to_string(),
+            difficulty_score: 90.0,
+        };
+
+        let conflicts =
+            io::ConflictHandler::detect_process_difficulty_conflicts(&[incoming.clone()])
+                .expect("检测自然键冲突失败");
+        assert_eq!(conflicts.len(), 1);
+        assert_eq!(
+            conflicts[0].primary_key,
+            io::ConflictHandler::process_difficulty_natural_key(&incoming)
+        );
+
+        let (result, updated) = import_process_difficulty_with_conflict(
+            &[incoming],
+            ConflictStrategy::Skip,
+            None,
+            vec![],
+            None,
+        )
+        .expect("按 skip 导入失败");
+
+        assert!(result.success);
+        assert_eq!(result.imported_count, 0);
+        assert_eq!(result.skipped_count, 1);
+        assert_eq!(updated, 0);
+
+        let after =
+            db::get_process_difficulty_optional_by_key(&steel_grade, 1.1, 2.1, 1010.0, 1210.0)
+                .expect("按自然键查询失败")
+                .expect("记录不存在");
+        assert_eq!(after.id, existing.id);
+        assert_eq!(after.difficulty_score, existing.difficulty_score);
+        assert_eq!(after.difficulty_level, existing.difficulty_level);
+    }
+
+    #[test]
+    fn test_process_difficulty_natural_key_conflict_overwrite_by_decision() {
+        ensure_test_db();
+
+        let steel_grade = unique_steel_grade("natural-overwrite");
+        let existing = seed_process_difficulty(&steel_grade, 1.2, 2.2, 1020.0, 1220.0, "中", 57.0);
+        let incoming = ProcessDifficulty {
+            id: 0,
+            steel_grade: steel_grade.clone(),
+            thickness_min: 1.2,
+            thickness_max: 2.2,
+            width_min: 1020.0,
+            width_max: 1220.0,
+            difficulty_level: "高".to_string(),
+            difficulty_score: 91.0,
+        };
+
+        let primary_key = io::ConflictHandler::process_difficulty_natural_key(&incoming);
+        let decisions = Some(vec![ConflictRecord {
+            row_number: 2,
+            primary_key: primary_key.clone(),
+            existing_data: serde_json::Value::Null,
+            new_data: serde_json::Value::Null,
+            action: Some(ConflictStrategy::Overwrite),
+        }]);
+
+        let (result, updated) = import_process_difficulty_with_conflict(
+            &[incoming],
+            ConflictStrategy::Skip,
+            decisions,
+            vec![],
+            None,
+        )
+        .expect("按决策 overwrite 导入失败");
+
+        assert!(result.success);
+        assert_eq!(result.imported_count, 1);
+        assert_eq!(result.skipped_count, 0);
+        assert_eq!(updated, 1);
+
+        let after = db::get_process_difficulty_optional_by_id(existing.id)
+            .expect("按 id 查询失败")
+            .expect("记录不存在");
+        assert_eq!(after.difficulty_score, 91.0);
+        assert_eq!(after.difficulty_level, "高");
+    }
+
+    #[test]
+    fn test_strategy_weights_conflict_skip() {
+        ensure_test_db();
+
+        let strategy_name = unique_strategy_name("skip");
+        db::upsert_strategy_weight(&strategy_name, 0.5, 0.5, Some("原始策略"))
+            .expect("插入测试策略失败");
+
+        let incoming = StrategyWeights {
+            strategy_name: strategy_name.clone(),
+            ws: 0.8,
+            wp: 0.2,
+            description: Some("导入策略".to_string()),
+        };
+
+        let (result, updated) = import_strategy_weights_with_conflict(
+            &[incoming],
+            ConflictStrategy::Skip,
+            None,
+            vec![],
+            None,
+        )
+        .expect("按 skip 导入策略失败");
+
+        assert!(result.success);
+        assert_eq!(result.imported_count, 0);
+        assert_eq!(result.skipped_count, 1);
+        assert_eq!(updated, 0);
+
+        let after = db::get_strategy_weight_optional(&strategy_name)
+            .expect("查询策略失败")
+            .expect("策略不存在");
+        assert_eq!(after.ws, 0.5);
+        assert_eq!(after.wp, 0.5);
+    }
+
+    #[test]
+    fn test_strategy_weights_conflict_overwrite_by_decision() {
+        ensure_test_db();
+
+        let strategy_name = unique_strategy_name("overwrite");
+        db::upsert_strategy_weight(&strategy_name, 0.6, 0.4, Some("原始策略"))
+            .expect("插入测试策略失败");
+
+        let incoming = StrategyWeights {
+            strategy_name: strategy_name.clone(),
+            ws: 0.9,
+            wp: 0.1,
+            description: Some("导入覆盖".to_string()),
+        };
+
+        let decisions = Some(vec![ConflictRecord {
+            row_number: 2,
+            primary_key: strategy_name.clone(),
+            existing_data: serde_json::Value::Null,
+            new_data: serde_json::Value::Null,
+            action: Some(ConflictStrategy::Overwrite),
+        }]);
+
+        let (result, updated) = import_strategy_weights_with_conflict(
+            &[incoming],
+            ConflictStrategy::Skip,
+            decisions,
+            vec![],
+            None,
+        )
+        .expect("按覆盖决策导入策略失败");
+
+        assert!(result.success);
+        assert_eq!(result.imported_count, 1);
+        assert_eq!(result.skipped_count, 0);
+        assert_eq!(updated, 1);
+
+        let after = db::get_strategy_weight_optional(&strategy_name)
+            .expect("查询策略失败")
+            .expect("策略不存在");
+        assert_eq!(after.ws, 0.9);
+        assert_eq!(after.wp, 0.1);
+    }
 }

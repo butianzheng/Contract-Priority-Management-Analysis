@@ -1,6 +1,6 @@
-use rusqlite::{params, Result};
-use super::schema::*;
 use super::init::get_connection;
+use super::schema::*;
+use rusqlite::{params, OptionalExtension, Result};
 
 /// 获取单个合同
 pub fn get_contract(contract_id: &str) -> Result<Contract, String> {
@@ -137,6 +137,28 @@ pub fn get_strategy_weights(strategy_name: &str) -> Result<StrategyWeights, Stri
     Ok(weights)
 }
 
+/// 获取策略权重（可选）
+pub fn get_strategy_weight_optional(
+    strategy_name: &str,
+) -> Result<Option<StrategyWeights>, String> {
+    let conn = get_connection().map_err(|e| e.to_string())?;
+
+    let mut stmt = conn
+        .prepare("SELECT strategy_name, ws, wp, description FROM strategy_weights WHERE strategy_name = ?1")
+        .map_err(|e| e.to_string())?;
+
+    stmt.query_row(params![strategy_name], |row| {
+        Ok(StrategyWeights {
+            strategy_name: row.get(0)?,
+            ws: row.get(1)?,
+            wp: row.get(2)?,
+            description: row.get(3)?,
+        })
+    })
+    .optional()
+    .map_err(|e| e.to_string())
+}
+
 /// 获取所有策略列表
 pub fn list_strategies() -> Result<Vec<String>, String> {
     let conn = get_connection().map_err(|e| e.to_string())?;
@@ -180,7 +202,12 @@ pub fn list_all_strategy_weights() -> Result<Vec<StrategyWeights>, String> {
 
 /// 创建或更新策略权重 (ws, wp)
 /// 同时确保 strategy_scoring_weights 表中也有对应记录（使用默认 w1, w2, w3）
-pub fn upsert_strategy_weight(strategy_name: &str, ws: f64, wp: f64, description: Option<&str>) -> Result<(), String> {
+pub fn upsert_strategy_weight(
+    strategy_name: &str,
+    ws: f64,
+    wp: f64,
+    description: Option<&str>,
+) -> Result<(), String> {
     let conn = get_connection().map_err(|e| e.to_string())?;
 
     // 1. 插入或更新 strategy_weights 表
@@ -190,7 +217,8 @@ pub fn upsert_strategy_weight(strategy_name: &str, ws: f64, wp: f64, description
          ON CONFLICT(strategy_name)
          DO UPDATE SET ws = ?2, wp = ?3, description = ?4",
         params![strategy_name, ws, wp, description],
-    ).map_err(|e| format!("保存策略权重失败: {}", e))?;
+    )
+    .map_err(|e| format!("保存策略权重失败: {}", e))?;
 
     // 2. 确保 strategy_scoring_weights 表中也有对应记录（如果不存在则使用默认值）
     conn.execute(
@@ -207,10 +235,12 @@ pub fn upsert_strategy_weight(strategy_name: &str, ws: f64, wp: f64, description
 pub fn delete_strategy_weight(strategy_name: &str) -> Result<(), String> {
     let conn = get_connection().map_err(|e| e.to_string())?;
 
-    let affected = conn.execute(
-        "DELETE FROM strategy_weights WHERE strategy_name = ?1",
-        params![strategy_name],
-    ).map_err(|e| format!("删除策略权重失败: {}", e))?;
+    let affected = conn
+        .execute(
+            "DELETE FROM strategy_weights WHERE strategy_name = ?1",
+            params![strategy_name],
+        )
+        .map_err(|e| format!("删除策略权重失败: {}", e))?;
 
     if affected == 0 {
         return Err(format!("策略 '{}' 不存在", strategy_name));
@@ -220,7 +250,11 @@ pub fn delete_strategy_weight(strategy_name: &str) -> Result<(), String> {
 }
 
 /// 查询工艺难度分数
-pub fn get_process_difficulty_score(steel_grade: &str, thickness: f64, width: f64) -> Result<f64, String> {
+pub fn get_process_difficulty_score(
+    steel_grade: &str,
+    thickness: f64,
+    width: f64,
+) -> Result<f64, String> {
     let conn = get_connection().map_err(|e| e.to_string())?;
 
     let mut stmt = conn
@@ -229,7 +263,7 @@ pub fn get_process_difficulty_score(steel_grade: &str, thickness: f64, width: f6
              WHERE steel_grade = ?1
              AND thickness_min <= ?2 AND thickness_max >= ?2
              AND width_min <= ?3 AND width_max >= ?3
-             LIMIT 1"
+             LIMIT 1",
         )
         .map_err(|e| e.to_string())?;
 
@@ -256,7 +290,10 @@ pub fn get_process_difficulty_score(steel_grade: &str, thickness: f64, width: f6
 ///
 /// # 静态规则声明
 /// 本函数仅查询配置表，不访问任何实时数据。
-pub fn get_rhythm_bonus_with_config(days_to_pdd: i64, spec_family: &str) -> Result<(f64, i32, i32, Option<String>), String> {
+pub fn get_rhythm_bonus_with_config(
+    days_to_pdd: i64,
+    spec_family: &str,
+) -> Result<(f64, i32, i32, Option<String>), String> {
     let conn = get_connection().map_err(|e| e.to_string())?;
 
     // 1. 获取当前激活的节拍配置
@@ -325,12 +362,14 @@ pub fn get_rhythm_bonus(rhythm_day: i32, spec_family: &str) -> Result<f64, Strin
              WHERE config_id = ?1
              AND rhythm_day = ?2
              AND (match_spec LIKE '%' || ?3 || '%' OR match_spec = '*' OR match_spec IS NULL)
-             LIMIT 1"
+             LIMIT 1",
         )
         .map_err(|e| e.to_string())?;
 
     let score: f64 = stmt
-        .query_row(params![config_id, rhythm_day, spec_family], |row| row.get(0))
+        .query_row(params![config_id, rhythm_day, spec_family], |row| {
+            row.get(0)
+        })
         .map_err(|e| format!("未找到匹配的节拍标签: {}", e))?;
 
     Ok(score)
@@ -381,9 +420,7 @@ pub fn get_latest_alpha(contract_id: &str) -> Result<Option<f64>, String> {
         .prepare("SELECT alpha_value FROM intervention_log WHERE contract_id = ?1 ORDER BY timestamp DESC LIMIT 1")
         .map_err(|e| e.to_string())?;
 
-    let alpha = stmt
-        .query_row(params![contract_id], |row| row.get(0))
-        .ok();
+    let alpha = stmt.query_row(params![contract_id], |row| row.get(0)).ok();
 
     Ok(alpha)
 }
@@ -408,7 +445,7 @@ pub fn get_all_latest_alphas() -> Result<std::collections::HashMap<String, f64>,
                  FROM intervention_log
                  GROUP BY contract_id
              ) i2
-             ON i1.contract_id = i2.contract_id AND i1.timestamp = i2.max_timestamp"
+             ON i1.contract_id = i2.contract_id AND i1.timestamp = i2.max_timestamp",
         )
         .map_err(|e| e.to_string())?;
 
@@ -469,7 +506,8 @@ pub fn get_all_intervention_logs(limit: Option<i64>) -> Result<Vec<InterventionL
         ),
         None => "SELECT id, contract_id, alpha_value, reason, user, timestamp
                  FROM intervention_log
-                 ORDER BY timestamp DESC".to_string(),
+                 ORDER BY timestamp DESC"
+            .to_string(),
     };
 
     let mut stmt = conn.prepare(&query).map_err(|e| e.to_string())?;
@@ -496,8 +534,8 @@ pub fn get_all_intervention_logs(limit: Option<i64>) -> Result<Vec<InterventionL
 // 配置相关查询方法 (Phase 1: 配置化)
 // ============================================
 
-use std::collections::HashMap;
 use crate::config::StrategyScoringWeights;
+use std::collections::HashMap;
 
 /// 获取所有评分配置（返回 HashMap<config_key, config_value>）
 pub fn get_all_scoring_configs() -> Result<HashMap<String, String>, String> {
@@ -612,7 +650,10 @@ pub fn update_scoring_config(
 }
 
 /// 获取配置变更历史
-pub fn get_config_change_history(config_key: Option<&str>, limit: Option<i64>) -> Result<Vec<ConfigChangeLog>, String> {
+pub fn get_config_change_history(
+    config_key: Option<&str>,
+    limit: Option<i64>,
+) -> Result<Vec<ConfigChangeLog>, String> {
     let conn = get_connection().map_err(|e| e.to_string())?;
 
     let (query, params_vec): (String, Vec<Box<dyn rusqlite::ToSql>>) = match (config_key, limit) {
@@ -702,7 +743,9 @@ pub fn list_all_strategy_scoring_weights() -> Result<Vec<StrategyScoringWeights>
     let conn = get_connection().map_err(|e| e.to_string())?;
 
     let mut stmt = conn
-        .prepare("SELECT strategy_name, w1, w2, w3 FROM strategy_scoring_weights ORDER BY strategy_name")
+        .prepare(
+            "SELECT strategy_name, w1, w2, w3 FROM strategy_scoring_weights ORDER BY strategy_name",
+        )
         .map_err(|e| e.to_string())?;
 
     let weights = stmt
@@ -860,11 +903,10 @@ pub fn set_default_filter_preset(preset_id: i64) -> Result<(), String> {
     }
 
     // 再将指定预设的 is_default 设为 1
-    let rows = conn
-        .execute(
-            "UPDATE filter_presets SET is_default = 1 WHERE preset_id = ?1",
-            params![preset_id],
-        );
+    let rows = conn.execute(
+        "UPDATE filter_presets SET is_default = 1 WHERE preset_id = ?1",
+        params![preset_id],
+    );
 
     match rows {
         Ok(0) => {
@@ -929,11 +971,10 @@ pub fn batch_adjust_alpha(
     }
 
     // 3. 提交事务
-    conn.execute("COMMIT", [])
-        .map_err(|e| {
-            let _ = conn.execute("ROLLBACK", []);
-            format!("提交事务失败: {}", e)
-        })?;
+    conn.execute("COMMIT", []).map_err(|e| {
+        let _ = conn.execute("ROLLBACK", []);
+        format!("提交事务失败: {}", e)
+    })?;
 
     Ok(batch_id)
 }
@@ -979,11 +1020,10 @@ pub fn batch_restore_alpha(
     }
 
     // 3. 提交事务
-    conn.execute("COMMIT", [])
-        .map_err(|e| {
-            let _ = conn.execute("ROLLBACK", []);
-            format!("提交事务失败: {}", e)
-        })?;
+    conn.execute("COMMIT", []).map_err(|e| {
+        let _ = conn.execute("ROLLBACK", []);
+        format!("提交事务失败: {}", e)
+    })?;
 
     Ok(batch_id)
 }
@@ -1425,6 +1465,127 @@ pub fn list_process_difficulty() -> Result<Vec<ProcessDifficulty>, String> {
     Ok(items)
 }
 
+/// 根据 ID 获取工艺难度配置（可选）
+pub fn get_process_difficulty_optional_by_id(id: i64) -> Result<Option<ProcessDifficulty>, String> {
+    let conn = get_connection().map_err(|e| e.to_string())?;
+
+    let item = conn
+        .query_row(
+            "SELECT id, steel_grade, thickness_min, thickness_max, width_min, width_max, difficulty_level, difficulty_score
+             FROM process_difficulty
+             WHERE id = ?1",
+            params![id],
+            |row| {
+                Ok(ProcessDifficulty {
+                    id: row.get(0)?,
+                    steel_grade: row.get(1)?,
+                    thickness_min: row.get(2)?,
+                    thickness_max: row.get(3)?,
+                    width_min: row.get(4)?,
+                    width_max: row.get(5)?,
+                    difficulty_level: row.get(6)?,
+                    difficulty_score: row.get(7)?,
+                })
+            },
+        )
+        .optional()
+        .map_err(|e| format!("查询工艺难度配置失败: {}", e))?;
+
+    Ok(item)
+}
+
+/// 按自然键获取工艺难度配置（可选）
+pub fn get_process_difficulty_optional_by_key(
+    steel_grade: &str,
+    thickness_min: f64,
+    thickness_max: f64,
+    width_min: f64,
+    width_max: f64,
+) -> Result<Option<ProcessDifficulty>, String> {
+    let conn = get_connection().map_err(|e| e.to_string())?;
+
+    let item = conn
+        .query_row(
+            "SELECT id, steel_grade, thickness_min, thickness_max, width_min, width_max, difficulty_level, difficulty_score
+             FROM process_difficulty
+             WHERE steel_grade = ?1
+               AND thickness_min = ?2
+               AND thickness_max = ?3
+               AND width_min = ?4
+               AND width_max = ?5",
+            params![steel_grade, thickness_min, thickness_max, width_min, width_max],
+            |row| {
+                Ok(ProcessDifficulty {
+                    id: row.get(0)?,
+                    steel_grade: row.get(1)?,
+                    thickness_min: row.get(2)?,
+                    thickness_max: row.get(3)?,
+                    width_min: row.get(4)?,
+                    width_max: row.get(5)?,
+                    difficulty_level: row.get(6)?,
+                    difficulty_score: row.get(7)?,
+                })
+            },
+        )
+        .optional()
+        .map_err(|e| format!("查询工艺难度配置失败: {}", e))?;
+
+    Ok(item)
+}
+
+/// 插入工艺难度配置
+pub fn insert_process_difficulty(item: &ProcessDifficulty) -> Result<(), String> {
+    let conn = get_connection().map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "INSERT INTO process_difficulty
+            (steel_grade, thickness_min, thickness_max, width_min, width_max, difficulty_level, difficulty_score)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![
+            item.steel_grade,
+            item.thickness_min,
+            item.thickness_max,
+            item.width_min,
+            item.width_max,
+            item.difficulty_level,
+            item.difficulty_score
+        ],
+    )
+    .map_err(|e| format!("插入工艺难度配置失败: {}", e))?;
+
+    Ok(())
+}
+
+/// 更新工艺难度配置（按 ID）
+pub fn update_process_difficulty(item: &ProcessDifficulty) -> Result<(), String> {
+    let conn = get_connection().map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "UPDATE process_difficulty
+         SET steel_grade = ?2,
+             thickness_min = ?3,
+             thickness_max = ?4,
+             width_min = ?5,
+             width_max = ?6,
+             difficulty_level = ?7,
+             difficulty_score = ?8
+         WHERE id = ?1",
+        params![
+            item.id,
+            item.steel_grade,
+            item.thickness_min,
+            item.thickness_max,
+            item.width_min,
+            item.width_max,
+            item.difficulty_level,
+            item.difficulty_score
+        ],
+    )
+    .map_err(|e| format!("更新工艺难度配置失败: {}", e))?;
+
+    Ok(())
+}
+
 // ============================================
 // Phase 8: 清洗规则管理
 // ============================================
@@ -1438,7 +1599,7 @@ pub fn list_transform_rules() -> Result<Vec<TransformRule>, String> {
             "SELECT rule_id, rule_name, category, description, enabled, priority, config_json,
                     created_by, created_at, updated_at
              FROM transform_rules
-             ORDER BY category, priority"
+             ORDER BY category, priority",
         )
         .map_err(|e| e.to_string())?;
 
@@ -1474,7 +1635,7 @@ pub fn list_transform_rules_by_category(category: &str) -> Result<Vec<TransformR
                     created_by, created_at, updated_at
              FROM transform_rules
              WHERE category = ?1
-             ORDER BY priority"
+             ORDER BY priority",
         )
         .map_err(|e| e.to_string())?;
 
@@ -1509,7 +1670,7 @@ pub fn get_transform_rule(rule_id: i64) -> Result<TransformRule, String> {
             "SELECT rule_id, rule_name, category, description, enabled, priority, config_json,
                     created_by, created_at, updated_at
              FROM transform_rules
-             WHERE rule_id = ?1"
+             WHERE rule_id = ?1",
         )
         .map_err(|e| e.to_string())?;
 
@@ -1562,7 +1723,8 @@ pub fn create_transform_rule(
                 "description": description,
                 "priority": priority,
                 "config_json": config_json
-            }).to_string(),
+            })
+            .to_string(),
             created_by
         ],
     )
@@ -1619,7 +1781,11 @@ pub fn update_transform_rule(
 }
 
 /// 删除清洗规则
-pub fn delete_transform_rule(rule_id: i64, deleted_by: &str, reason: Option<&str>) -> Result<(), String> {
+pub fn delete_transform_rule(
+    rule_id: i64,
+    deleted_by: &str,
+    reason: Option<&str>,
+) -> Result<(), String> {
     let conn = get_connection().map_err(|e| e.to_string())?;
 
     // 获取旧值用于日志记录
@@ -1650,7 +1816,11 @@ pub fn delete_transform_rule(rule_id: i64, deleted_by: &str, reason: Option<&str
 }
 
 /// 切换规则启用/禁用状态
-pub fn toggle_transform_rule_enabled(rule_id: i64, enabled: bool, updated_by: &str) -> Result<(), String> {
+pub fn toggle_transform_rule_enabled(
+    rule_id: i64,
+    enabled: bool,
+    updated_by: &str,
+) -> Result<(), String> {
     let conn = get_connection().map_err(|e| e.to_string())?;
 
     let enabled_value: i64 = if enabled { 1 } else { 0 };
@@ -1680,7 +1850,10 @@ pub fn toggle_transform_rule_enabled(rule_id: i64, enabled: bool, updated_by: &s
 }
 
 /// 获取规则变更历史
-pub fn list_transform_rule_change_log(rule_id: Option<i64>, limit: i64) -> Result<Vec<TransformRuleChangeLog>, String> {
+pub fn list_transform_rule_change_log(
+    rule_id: Option<i64>,
+    limit: i64,
+) -> Result<Vec<TransformRuleChangeLog>, String> {
     let conn = get_connection().map_err(|e| e.to_string())?;
 
     let query = if rule_id.is_some() {
@@ -1763,7 +1936,10 @@ pub fn log_transform_execution(
 }
 
 /// 获取规则执行历史
-pub fn list_transform_execution_log(rule_id: Option<i64>, limit: i64) -> Result<Vec<TransformExecutionLog>, String> {
+pub fn list_transform_execution_log(
+    rule_id: Option<i64>,
+    limit: i64,
+) -> Result<Vec<TransformExecutionLog>, String> {
     let conn = get_connection().map_err(|e| e.to_string())?;
 
     let query = if rule_id.is_some() {
@@ -1953,34 +2129,33 @@ pub fn get_spec_family(family_id: i64) -> Result<SpecFamily, String> {
 pub fn get_spec_family_by_name_or_code(name_or_code: &str) -> Result<Option<SpecFamily>, String> {
     let conn = get_connection().map_err(|e| e.to_string())?;
 
-    let result = conn
-        .query_row(
-            "SELECT family_id, family_name, family_code, description, factor,
+    let result = conn.query_row(
+        "SELECT family_id, family_name, family_code, description, factor,
                     steel_grades, thickness_min, thickness_max, width_min, width_max,
                     enabled, sort_order, created_by, created_at, updated_at
              FROM spec_family_master
              WHERE family_name = ? OR family_code = ?",
-            params![name_or_code, name_or_code],
-            |row| {
-                Ok(SpecFamily {
-                    family_id: row.get(0)?,
-                    family_name: row.get(1)?,
-                    family_code: row.get(2)?,
-                    description: row.get(3)?,
-                    factor: row.get(4)?,
-                    steel_grades: row.get(5)?,
-                    thickness_min: row.get(6)?,
-                    thickness_max: row.get(7)?,
-                    width_min: row.get(8)?,
-                    width_max: row.get(9)?,
-                    enabled: row.get(10)?,
-                    sort_order: row.get(11)?,
-                    created_by: row.get(12)?,
-                    created_at: row.get(13)?,
-                    updated_at: row.get(14)?,
-                })
-            },
-        );
+        params![name_or_code, name_or_code],
+        |row| {
+            Ok(SpecFamily {
+                family_id: row.get(0)?,
+                family_name: row.get(1)?,
+                family_code: row.get(2)?,
+                description: row.get(3)?,
+                factor: row.get(4)?,
+                steel_grades: row.get(5)?,
+                thickness_min: row.get(6)?,
+                thickness_max: row.get(7)?,
+                width_min: row.get(8)?,
+                width_max: row.get(9)?,
+                enabled: row.get(10)?,
+                sort_order: row.get(11)?,
+                created_by: row.get(12)?,
+                created_at: row.get(13)?,
+                updated_at: row.get(14)?,
+            })
+        },
+    );
 
     match result {
         Ok(family) => Ok(Some(family)),
@@ -2013,9 +2188,17 @@ pub fn create_spec_family(
              sort_order, created_by)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         params![
-            family_name, family_code, description, factor, steel_grades,
-            thickness_min, thickness_max, width_min, width_max,
-            sort_order, user
+            family_name,
+            family_code,
+            description,
+            factor,
+            steel_grades,
+            thickness_min,
+            thickness_max,
+            width_min,
+            width_max,
+            sort_order,
+            user
         ],
     )
     .map_err(|e| format!("创建规格族失败: {}", e))?;
@@ -2089,9 +2272,17 @@ pub fn update_spec_family(
             updated_at = datetime('now','localtime')
          WHERE family_id = ?",
         params![
-            family_name, family_code, description, factor,
-            steel_grades, thickness_min, thickness_max,
-            width_min, width_max, sort_order, family_id
+            family_name,
+            family_code,
+            description,
+            factor,
+            steel_grades,
+            thickness_min,
+            thickness_max,
+            width_min,
+            width_max,
+            sort_order,
+            family_id
         ],
     )
     .map_err(|e| format!("更新规格族失败: {}", e))?;
@@ -2115,9 +2306,12 @@ pub fn update_spec_family(
             (family_id, family_name, change_type, old_value, new_value, changed_by, change_reason)
          VALUES (?, ?, 'update', ?, ?, ?, ?)",
         params![
-            family_id, family_name,
-            old_value.to_string(), new_value.to_string(),
-            user, reason
+            family_id,
+            family_name,
+            old_value.to_string(),
+            new_value.to_string(),
+            user,
+            reason
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -2144,8 +2338,11 @@ pub fn delete_spec_family(family_id: i64, user: &str, reason: Option<&str>) -> R
             (family_id, family_name, change_type, old_value, changed_by, change_reason)
          VALUES (?, ?, 'delete', ?, ?, ?)",
         params![
-            family_id, old_family.family_name,
-            old_value.to_string(), user, reason
+            family_id,
+            old_family.family_name,
+            old_value.to_string(),
+            user,
+            reason
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -2184,11 +2381,17 @@ pub fn toggle_spec_family_enabled(family_id: i64, enabled: bool, user: &str) -> 
             (family_id, family_name, change_type, old_value, new_value, changed_by, change_reason)
          VALUES (?, ?, ?, ?, ?, ?, ?)",
         params![
-            family_id, family.family_name, change_type,
+            family_id,
+            family.family_name,
+            change_type,
             format!("{{\"enabled\": {}}}", family.enabled),
             format!("{{\"enabled\": {}}}", enabled_int),
             user,
-            if enabled { "启用规格族" } else { "禁用规格族" }
+            if enabled {
+                "启用规格族"
+            } else {
+                "禁用规格族"
+            }
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -2264,13 +2467,12 @@ pub fn list_spec_family_change_log(
 pub fn get_spec_family_factor(family_name_or_code: &str) -> Result<f64, String> {
     let conn = get_connection().map_err(|e| e.to_string())?;
 
-    let factor = conn
-        .query_row(
-            "SELECT factor FROM spec_family_master
+    let factor = conn.query_row(
+        "SELECT factor FROM spec_family_master
              WHERE (family_name = ? OR family_code = ?) AND enabled = 1",
-            params![family_name_or_code, family_name_or_code],
-            |row| row.get::<_, f64>(0),
-        );
+        params![family_name_or_code, family_name_or_code],
+        |row| row.get::<_, f64>(0),
+    );
 
     match factor {
         Ok(f) => Ok(f),
@@ -2422,7 +2624,14 @@ pub fn update_rhythm_config(
         "INSERT INTO rhythm_config_change_log
             (config_id, config_name, change_type, old_value, new_value, changed_by, change_reason)
          VALUES (?, ?, 'update', ?, ?, ?, ?)",
-        params![config_id, config_name, old_value.to_string(), new_value.to_string(), user, reason],
+        params![
+            config_id,
+            config_name,
+            old_value.to_string(),
+            new_value.to_string(),
+            user,
+            reason
+        ],
     )
     .map_err(|e| e.to_string())?;
 
@@ -2430,7 +2639,11 @@ pub fn update_rhythm_config(
 }
 
 /// 删除节拍配置
-pub fn delete_rhythm_config(config_id: i64, user: &str, reason: Option<&str>) -> Result<(), String> {
+pub fn delete_rhythm_config(
+    config_id: i64,
+    user: &str,
+    reason: Option<&str>,
+) -> Result<(), String> {
     let conn = get_connection().map_err(|e| e.to_string())?;
 
     // 获取配置信息
@@ -2452,7 +2665,13 @@ pub fn delete_rhythm_config(config_id: i64, user: &str, reason: Option<&str>) ->
         "INSERT INTO rhythm_config_change_log
             (config_id, config_name, change_type, old_value, changed_by, change_reason)
          VALUES (?, ?, 'delete', ?, ?, ?)",
-        params![config_id, config.config_name, old_value.to_string(), user, reason],
+        params![
+            config_id,
+            config.config_name,
+            old_value.to_string(),
+            user,
+            reason
+        ],
     )
     .map_err(|e| e.to_string())?;
 
@@ -2499,7 +2718,10 @@ pub fn activate_rhythm_config(config_id: i64, user: &str) -> Result<(), String> 
         .map_err(|e| format!("开启事务失败: {}", e))?;
 
     // 禁用所有配置
-    if let Err(e) = conn.execute("UPDATE rhythm_config SET is_active = 0, updated_at = datetime('now','localtime')", []) {
+    if let Err(e) = conn.execute(
+        "UPDATE rhythm_config SET is_active = 0, updated_at = datetime('now','localtime')",
+        [],
+    ) {
         let _ = conn.execute("ROLLBACK", []);
         return Err(format!("禁用配置失败: {}", e));
     }
@@ -2537,11 +2759,10 @@ pub fn activate_rhythm_config(config_id: i64, user: &str) -> Result<(), String> 
         return Err(format!("记录变更日志失败: {}", e));
     }
 
-    conn.execute("COMMIT", [])
-        .map_err(|e| {
-            let _ = conn.execute("ROLLBACK", []);
-            format!("提交事务失败: {}", e)
-        })?;
+    conn.execute("COMMIT", []).map_err(|e| {
+        let _ = conn.execute("ROLLBACK", []);
+        format!("提交事务失败: {}", e)
+    })?;
 
     Ok(())
 }
@@ -2555,7 +2776,7 @@ pub fn list_rhythm_labels(config_id: i64) -> Result<Vec<RhythmLabel>, String> {
             "SELECT id, config_id, rhythm_day, label_name, match_spec, bonus_score, description
              FROM rhythm_label
              WHERE config_id = ?
-             ORDER BY rhythm_day"
+             ORDER BY rhythm_day",
         )
         .map_err(|e| e.to_string())?;
 
@@ -2617,11 +2838,8 @@ pub fn upsert_rhythm_label(
 pub fn delete_rhythm_label(label_id: i64) -> Result<(), String> {
     let conn = get_connection().map_err(|e| e.to_string())?;
 
-    conn.execute(
-        "DELETE FROM rhythm_label WHERE id = ?",
-        params![label_id],
-    )
-    .map_err(|e| format!("删除节拍标签失败: {}", e))?;
+    conn.execute("DELETE FROM rhythm_label WHERE id = ?", params![label_id])
+        .map_err(|e| format!("删除节拍标签失败: {}", e))?;
 
     Ok(())
 }
@@ -2703,7 +2921,7 @@ pub fn list_aggregation_bins() -> Result<Vec<AggregationBin>, String> {
                     sort_order, enabled, description, created_at, updated_at
              FROM aggregation_bins
              WHERE enabled = 1
-             ORDER BY dimension, sort_order"
+             ORDER BY dimension, sort_order",
         )
         .map_err(|e| e.to_string())?;
 
@@ -2740,7 +2958,7 @@ pub fn list_aggregation_bins_by_dimension(dimension: &str) -> Result<Vec<Aggrega
                     sort_order, enabled, description, created_at, updated_at
              FROM aggregation_bins
              WHERE dimension = ? AND enabled = 1
-             ORDER BY sort_order"
+             ORDER BY sort_order",
         )
         .map_err(|e| e.to_string())?;
 
@@ -2852,7 +3070,12 @@ pub fn update_p2_curve_config(
 ) -> Result<(), String> {
     // 验证 alpha + beta = 1.0
     if (alpha + beta - 1.0).abs() > 0.001 {
-        return Err(format!("alpha + beta 必须等于 1.0，当前值: {} + {} = {}", alpha, beta, alpha + beta));
+        return Err(format!(
+            "alpha + beta 必须等于 1.0，当前值: {} + {} = {}",
+            alpha,
+            beta,
+            alpha + beta
+        ));
     }
 
     let conn = get_connection().map_err(|e| e.to_string())?;
@@ -2922,7 +3145,10 @@ pub fn get_contract_aggregation_stats(
     let (width_bin_code, width_bin_name) = get_bin_for_value("width", width)?;
 
     // 构建聚合键
-    let aggregation_key = format!("{}|{}|{}|{}", spec_family, steel_grade, thickness_bin_code, width_bin_code);
+    let aggregation_key = format!(
+        "{}|{}|{}|{}",
+        spec_family, steel_grade, thickness_bin_code, width_bin_code
+    );
 
     let conn = get_connection().map_err(|e| e.to_string())?;
 
@@ -2965,7 +3191,8 @@ pub fn get_contract_aggregation_stats(
 /// 批量获取所有合同的聚合统计信息
 ///
 /// 返回一个 HashMap，key 为合同 ID，value 为聚合统计信息
-pub fn get_all_contracts_aggregation_stats() -> Result<std::collections::HashMap<String, AggregationStats>, String> {
+pub fn get_all_contracts_aggregation_stats(
+) -> Result<std::collections::HashMap<String, AggregationStats>, String> {
     let conn = get_connection().map_err(|e| e.to_string())?;
 
     // 获取所有启用的区间配置
@@ -2975,7 +3202,7 @@ pub fn get_all_contracts_aggregation_stats() -> Result<std::collections::HashMap
     // 为每个合同计算聚合键
     let mut stmt = conn
         .prepare(
-            "SELECT contract_id, spec_family, steel_grade, thickness, width FROM contract_master"
+            "SELECT contract_id, spec_family, steel_grade, thickness, width FROM contract_master",
         )
         .map_err(|e| e.to_string())?;
 
@@ -3004,14 +3231,20 @@ pub fn get_all_contracts_aggregation_stats() -> Result<std::collections::HashMap
     }
 
     // 构建聚合键到合同列表的映射
-    let mut aggregation_map: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
-    let mut contract_to_key: std::collections::HashMap<String, (String, String, String, String, String, String, String)> =
+    let mut aggregation_map: std::collections::HashMap<String, Vec<String>> =
         std::collections::HashMap::new();
+    let mut contract_to_key: std::collections::HashMap<
+        String,
+        (String, String, String, String, String, String, String),
+    > = std::collections::HashMap::new();
 
     for (contract_id, spec_family, steel_grade, thickness, width) in &contracts {
         let (thickness_bin_code, thickness_bin_name) = find_bin(&thickness_bins, *thickness);
         let (width_bin_code, width_bin_name) = find_bin(&width_bins, *width);
-        let aggregation_key = format!("{}|{}|{}|{}", spec_family, steel_grade, thickness_bin_code, width_bin_code);
+        let aggregation_key = format!(
+            "{}|{}|{}|{}",
+            spec_family, steel_grade, thickness_bin_code, width_bin_code
+        );
 
         aggregation_map
             .entry(aggregation_key.clone())
@@ -3033,10 +3266,16 @@ pub fn get_all_contracts_aggregation_stats() -> Result<std::collections::HashMap
     }
 
     // 构建最终结果
-    let mut result: std::collections::HashMap<String, AggregationStats> = std::collections::HashMap::new();
+    let mut result: std::collections::HashMap<String, AggregationStats> =
+        std::collections::HashMap::new();
 
-    for (contract_id, (key, spec_family, steel_grade, t_code, t_name, w_code, w_name)) in contract_to_key {
-        let count = aggregation_map.get(&key).map(|v| v.len() as i64).unwrap_or(0);
+    for (contract_id, (key, spec_family, steel_grade, t_code, t_name, w_code, w_name)) in
+        contract_to_key
+    {
+        let count = aggregation_map
+            .get(&key)
+            .map(|v| v.len() as i64)
+            .unwrap_or(0);
 
         result.insert(
             contract_id,
@@ -3111,7 +3350,9 @@ pub fn refresh_aggregation_stats_cache() -> Result<i64, String> {
 
 /// 从缓存中获取聚合统计
 #[allow(dead_code)]
-pub fn get_aggregation_stats_from_cache(aggregation_key: &str) -> Result<Option<AggregationStatsCache>, String> {
+pub fn get_aggregation_stats_from_cache(
+    aggregation_key: &str,
+) -> Result<Option<AggregationStatsCache>, String> {
     let conn = get_connection().map_err(|e| e.to_string())?;
 
     let result = conn.query_row(
@@ -3152,7 +3393,7 @@ pub fn get_aggregation_summary() -> Result<Vec<serde_json::Value>, String> {
             "SELECT spec_family, thickness_bin, width_bin, SUM(contract_count) as total_count
              FROM aggregation_stats_cache
              GROUP BY spec_family, thickness_bin, width_bin
-             ORDER BY spec_family, thickness_bin, width_bin"
+             ORDER BY spec_family, thickness_bin, width_bin",
         )
         .map_err(|e| e.to_string())?;
 
@@ -3219,7 +3460,9 @@ pub fn list_missing_value_strategies() -> Result<Vec<MissingValueStrategy>, Stri
 
 /// 获取单个字段的缺失值策略
 #[allow(dead_code)]
-pub fn get_missing_value_strategy(field_name: &str) -> Result<Option<MissingValueStrategy>, String> {
+pub fn get_missing_value_strategy(
+    field_name: &str,
+) -> Result<Option<MissingValueStrategy>, String> {
     let conn = get_connection().map_err(|e| e.to_string())?;
 
     let result = conn.query_row(
@@ -3299,11 +3542,30 @@ pub fn log_validation(
 #[allow(dead_code)]
 pub fn log_contract_validation_issues(
     batch_id: &str,
-    issues: &[(String, String, String, String, Option<String>, Option<String>, String, Option<String>)],
+    issues: &[(
+        String,
+        String,
+        String,
+        String,
+        Option<String>,
+        Option<String>,
+        String,
+        Option<String>,
+    )],
 ) -> Result<(), String> {
     let conn = get_connection().map_err(|e| e.to_string())?;
 
-    for (contract_id, field_name, issue_type, severity, original_value, default_value_used, message, suggested_fix) in issues {
+    for (
+        contract_id,
+        field_name,
+        issue_type,
+        severity,
+        original_value,
+        default_value_used,
+        message,
+        suggested_fix,
+    ) in issues
+    {
         conn.execute(
             "INSERT INTO contract_validation_issues
                 (batch_id, contract_id, field_name, issue_type, severity, original_value, default_value_used, message, suggested_fix)
@@ -3327,7 +3589,7 @@ pub fn get_recent_validation_logs(limit: i64) -> Result<Vec<serde_json::Value>, 
                     warning_contracts, error_contracts, validated_by
              FROM validation_log
              ORDER BY validation_time DESC
-             LIMIT ?"
+             LIMIT ?",
         )
         .map_err(|e| e.to_string())?;
 
@@ -3396,7 +3658,7 @@ pub fn get_contract_validation_issues(contract_id: &str) -> Result<Vec<serde_jso
                     default_value_used, message, suggested_fix, is_resolved, created_at
              FROM contract_validation_issues
              WHERE contract_id = ?
-             ORDER BY created_at DESC"
+             ORDER BY created_at DESC",
         )
         .map_err(|e| e.to_string())?;
 
@@ -3567,11 +3829,10 @@ pub fn create_strategy_version(
     }
 
     // 9. 提交事务
-    conn.execute("COMMIT", [])
-        .map_err(|e| {
-            let _ = conn.execute("ROLLBACK", []);
-            format!("提交事务失败: {}", e)
-        })?;
+    conn.execute("COMMIT", []).map_err(|e| {
+        let _ = conn.execute("ROLLBACK", []);
+        format!("提交事务失败: {}", e)
+    })?;
 
     Ok(version_id)
 }
@@ -3585,14 +3846,16 @@ fn create_scoring_config_snapshot() -> Result<String, String> {
 /// 创建 P2 曲线配置的 JSON 快照
 fn create_p2_curve_config_snapshot() -> Result<Option<String>, String> {
     let config = get_p2_curve_config()?;
-    let json = serde_json::to_string(&config).map_err(|e| format!("序列化 P2 曲线配置失败: {}", e))?;
+    let json =
+        serde_json::to_string(&config).map_err(|e| format!("序列化 P2 曲线配置失败: {}", e))?;
     Ok(Some(json))
 }
 
 /// 创建聚合区间配置的 JSON 快照
 fn create_aggregation_bins_snapshot() -> Result<Option<String>, String> {
     let bins = list_aggregation_bins()?;
-    let json = serde_json::to_string(&bins).map_err(|e| format!("序列化聚合区间配置失败: {}", e))?;
+    let json =
+        serde_json::to_string(&bins).map_err(|e| format!("序列化聚合区间配置失败: {}", e))?;
     Ok(Some(json))
 }
 
@@ -3609,7 +3872,7 @@ fn create_rhythm_config_snapshot() -> Result<Option<String>, String> {
             });
             Ok(Some(snapshot.to_string()))
         }
-        Err(_) => Ok(None)
+        Err(_) => Ok(None),
     }
 }
 
@@ -3623,7 +3886,7 @@ pub fn list_strategy_versions(strategy_name: &str) -> Result<Vec<StrategyVersion
                     is_active, is_locked, created_by, created_at, description
              FROM strategy_version
              WHERE strategy_name = ?
-             ORDER BY version_number DESC"
+             ORDER BY version_number DESC",
         )
         .map_err(|e| e.to_string())?;
 
@@ -3782,17 +4045,20 @@ pub fn activate_strategy_version(version_id: i64, user: &str) -> Result<(), Stri
         return Err(format!("记录变更日志失败: {}", e));
     }
 
-    conn.execute("COMMIT", [])
-        .map_err(|e| {
-            let _ = conn.execute("ROLLBACK", []);
-            format!("提交事务失败: {}", e)
-        })?;
+    conn.execute("COMMIT", []).map_err(|e| {
+        let _ = conn.execute("ROLLBACK", []);
+        format!("提交事务失败: {}", e)
+    })?;
 
     Ok(())
 }
 
 /// 锁定版本（锁定后不可删除）
-pub fn lock_strategy_version(version_id: i64, user: &str, reason: Option<&str>) -> Result<(), String> {
+pub fn lock_strategy_version(
+    version_id: i64,
+    user: &str,
+    reason: Option<&str>,
+) -> Result<(), String> {
     let conn = get_connection().map_err(|e| e.to_string())?;
 
     conn.execute(
@@ -3812,7 +4078,11 @@ pub fn lock_strategy_version(version_id: i64, user: &str, reason: Option<&str>) 
 }
 
 /// 解锁版本
-pub fn unlock_strategy_version(version_id: i64, user: &str, reason: Option<&str>) -> Result<(), String> {
+pub fn unlock_strategy_version(
+    version_id: i64,
+    user: &str,
+    reason: Option<&str>,
+) -> Result<(), String> {
     let conn = get_connection().map_err(|e| e.to_string())?;
 
     conn.execute(
@@ -3832,7 +4102,11 @@ pub fn unlock_strategy_version(version_id: i64, user: &str, reason: Option<&str>
 }
 
 /// 删除版本（仅可删除未锁定的非激活版本）
-pub fn delete_strategy_version(version_id: i64, user: &str, reason: Option<&str>) -> Result<(), String> {
+pub fn delete_strategy_version(
+    version_id: i64,
+    user: &str,
+    reason: Option<&str>,
+) -> Result<(), String> {
     let version = get_strategy_version(version_id)?;
 
     if version.is_active == 1 {
@@ -4033,10 +4307,7 @@ pub fn get_sandbox_session(session_id: i64) -> Result<SandboxSession, String> {
 }
 
 /// 保存沙盘计算结果
-pub fn save_sandbox_results(
-    session_id: i64,
-    results: &[SandboxResult],
-) -> Result<(), String> {
+pub fn save_sandbox_results(session_id: i64, results: &[SandboxResult]) -> Result<(), String> {
     let conn = get_connection().map_err(|e| e.to_string())?;
 
     conn.execute("BEGIN TRANSACTION", [])
@@ -4089,11 +4360,10 @@ pub fn save_sandbox_results(
         return Err(format!("更新会话状态失败: {}", e));
     }
 
-    conn.execute("COMMIT", [])
-        .map_err(|e| {
-            let _ = conn.execute("ROLLBACK", []);
-            format!("提交事务失败: {}", e)
-        })?;
+    conn.execute("COMMIT", []).map_err(|e| {
+        let _ = conn.execute("ROLLBACK", []);
+        format!("提交事务失败: {}", e)
+    })?;
 
     Ok(())
 }
@@ -4110,7 +4380,7 @@ pub fn get_sandbox_results(session_id: i64) -> Result<Vec<SandboxResult>, String
                     aggregation_key, aggregation_count, priority_rank
              FROM sandbox_result
              WHERE session_id = ?
-             ORDER BY priority_rank"
+             ORDER BY priority_rank",
         )
         .map_err(|e| e.to_string())?;
 
@@ -4255,10 +4525,17 @@ pub fn update_import_audit_status(
              completed_at = datetime('now','localtime')
          WHERE audit_id = ?",
         params![
-            total_rows, valid_rows, error_rows, conflict_rows,
-            imported_count, updated_count, skipped_count,
-            status, error_message,
-            validation_errors, validation_warnings,
+            total_rows,
+            valid_rows,
+            error_rows,
+            conflict_rows,
+            imported_count,
+            updated_count,
+            skipped_count,
+            status,
+            error_message,
+            validation_errors,
+            validation_warnings,
             audit_id
         ],
     )
@@ -4327,7 +4604,7 @@ pub fn list_import_audits(
                 applied_transform_rules, imported_by, started_at, completed_at,
                 validation_errors, validation_warnings
          FROM import_audit_log
-         WHERE 1=1"
+         WHERE 1=1",
     );
 
     if import_type.is_some() {
@@ -4466,27 +4743,42 @@ pub fn batch_resolve_conflicts(
 ) -> Result<i64, String> {
     let conn = get_connection().map_err(|e| e.to_string())?;
 
-    let affected = conn.execute(
-        "UPDATE import_conflict_log
+    let affected = conn
+        .execute(
+            "UPDATE import_conflict_log
          SET action = ?, action_reason = ?, decided_by = ?, decided_at = datetime('now','localtime')
          WHERE audit_id = ? AND action = 'pending'",
-        params![action, action_reason, user, audit_id],
-    )
-    .map_err(|e| format!("批量解决冲突失败: {}", e))?;
+            params![action, action_reason, user, audit_id],
+        )
+        .map_err(|e| format!("批量解决冲突失败: {}", e))?;
 
     Ok(affected as i64)
 }
 
 /// 获取字段对齐规则
-pub fn list_field_alignment_rules(data_type: Option<&str>) -> Result<Vec<FieldAlignmentRule>, String> {
+pub fn list_field_alignment_rules(
+    data_type: Option<&str>,
+    include_disabled: bool,
+) -> Result<Vec<FieldAlignmentRule>, String> {
     let conn = get_connection().map_err(|e| e.to_string())?;
 
-    let query = if data_type.is_some() {
+    let query = if data_type.is_some() && include_disabled {
+        "SELECT rule_id, rule_name, data_type, source_type, description, enabled, priority,
+                field_mapping, value_transform, default_values, created_by, created_at, updated_at
+         FROM field_alignment_rule
+         WHERE data_type = ?
+         ORDER BY enabled DESC, priority"
+    } else if data_type.is_some() {
         "SELECT rule_id, rule_name, data_type, source_type, description, enabled, priority,
                 field_mapping, value_transform, default_values, created_by, created_at, updated_at
          FROM field_alignment_rule
          WHERE data_type = ? AND enabled = 1
          ORDER BY priority"
+    } else if include_disabled {
+        "SELECT rule_id, rule_name, data_type, source_type, description, enabled, priority,
+                field_mapping, value_transform, default_values, created_by, created_at, updated_at
+         FROM field_alignment_rule
+         ORDER BY data_type, enabled DESC, priority"
     } else {
         "SELECT rule_id, rule_name, data_type, source_type, description, enabled, priority,
                 field_mapping, value_transform, default_values, created_by, created_at, updated_at
@@ -4563,7 +4855,17 @@ pub fn create_field_alignment_rule(
             (rule_name, data_type, source_type, description, enabled, priority,
              field_mapping, value_transform, default_values, created_by)
          VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?)",
-        params![rule_name, data_type, source_type, description, priority, field_mapping, value_transform, default_values, user],
+        params![
+            rule_name,
+            data_type,
+            source_type,
+            description,
+            priority,
+            field_mapping,
+            value_transform,
+            default_values,
+            user
+        ],
     )
     .map_err(|e| format!("创建字段对齐规则失败: {}", e))?;
 
@@ -4580,8 +4882,168 @@ pub fn create_field_alignment_rule(
     Ok(rule_id)
 }
 
+/// 保存字段对齐规则（rule_id 存在则更新，不存在则创建）
+pub fn save_field_alignment_rule(rule: &FieldAlignmentRule, user: &str) -> Result<i64, String> {
+    let conn = get_connection().map_err(|e| e.to_string())?;
+
+    if let Some(rule_id) = rule.rule_id {
+        let old_mapping: Option<String> = conn
+            .query_row(
+                "SELECT field_mapping FROM field_alignment_rule WHERE rule_id = ?1",
+                params![rule_id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| format!("查询字段对齐规则失败: {}", e))?;
+
+        let old_mapping = old_mapping.ok_or_else(|| format!("字段对齐规则不存在: {}", rule_id))?;
+
+        conn.execute(
+            "UPDATE field_alignment_rule
+             SET rule_name = ?1,
+                 data_type = ?2,
+                 source_type = ?3,
+                 description = ?4,
+                 enabled = ?5,
+                 priority = ?6,
+                 field_mapping = ?7,
+                 value_transform = ?8,
+                 default_values = ?9,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE rule_id = ?10",
+            params![
+                rule.rule_name,
+                rule.data_type,
+                rule.source_type,
+                rule.description,
+                rule.enabled,
+                rule.priority,
+                rule.field_mapping,
+                rule.value_transform,
+                rule.default_values,
+                rule_id
+            ],
+        )
+        .map_err(|e| format!("更新字段对齐规则失败: {}", e))?;
+
+        conn.execute(
+            "INSERT INTO field_alignment_change_log (rule_id, change_type, old_value, new_value, changed_by)
+             VALUES (?1, 'update', ?2, ?3, ?4)",
+            params![rule_id, old_mapping, rule.field_mapping, user],
+        )
+        .map_err(|e| format!("记录字段对齐规则变更失败: {}", e))?;
+
+        Ok(rule_id)
+    } else {
+        create_field_alignment_rule(
+            &rule.rule_name,
+            &rule.data_type,
+            rule.source_type.as_deref(),
+            rule.description.as_deref(),
+            rule.priority,
+            &rule.field_mapping,
+            rule.value_transform.as_deref(),
+            rule.default_values.as_deref(),
+            user,
+        )
+    }
+}
+
+/// 删除字段对齐规则
+pub fn delete_field_alignment_rule(rule_id: i64, user: &str) -> Result<(), String> {
+    let conn = get_connection().map_err(|e| e.to_string())?;
+
+    let old_mapping: Option<String> = conn
+        .query_row(
+            "SELECT field_mapping FROM field_alignment_rule WHERE rule_id = ?1",
+            params![rule_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| format!("查询字段对齐规则失败: {}", e))?;
+
+    let old_mapping = old_mapping.ok_or_else(|| format!("字段对齐规则不存在: {}", rule_id))?;
+
+    conn.execute(
+        "INSERT INTO field_alignment_change_log (rule_id, change_type, old_value, changed_by)
+         VALUES (?1, 'delete', ?2, ?3)",
+        params![rule_id, old_mapping, user],
+    )
+    .map_err(|e| format!("记录字段对齐规则删除日志失败: {}", e))?;
+
+    conn.execute(
+        "DELETE FROM field_alignment_rule WHERE rule_id = ?1",
+        params![rule_id],
+    )
+    .map_err(|e| format!("删除字段对齐规则失败: {}", e))?;
+
+    Ok(())
+}
+
+/// 获取字段对齐规则变更日志
+pub fn list_field_alignment_change_logs(
+    rule_id: Option<i64>,
+    limit: Option<i64>,
+) -> Result<Vec<FieldAlignmentChangeLog>, String> {
+    let conn = get_connection().map_err(|e| e.to_string())?;
+    let safe_limit = limit.unwrap_or(50).max(1);
+
+    let query = if rule_id.is_some() {
+        "SELECT log_id, rule_id, change_type, old_value, new_value, change_reason, changed_by, changed_at
+         FROM field_alignment_change_log
+         WHERE rule_id = ?1
+         ORDER BY changed_at DESC, log_id DESC
+         LIMIT ?2"
+    } else {
+        "SELECT log_id, rule_id, change_type, old_value, new_value, change_reason, changed_by, changed_at
+         FROM field_alignment_change_log
+         ORDER BY changed_at DESC, log_id DESC
+         LIMIT ?1"
+    };
+
+    let mut stmt = conn.prepare(query).map_err(|e| e.to_string())?;
+
+    let logs = if let Some(id) = rule_id {
+        stmt.query_map(params![id, safe_limit], |row| {
+            Ok(FieldAlignmentChangeLog {
+                log_id: row.get(0)?,
+                rule_id: row.get(1)?,
+                change_type: row.get(2)?,
+                old_value: row.get(3)?,
+                new_value: row.get(4)?,
+                change_reason: row.get(5)?,
+                changed_by: row.get(6)?,
+                changed_at: row.get(7)?,
+            })
+        })
+        .map_err(|e| format!("查询字段映射变更日志失败: {}", e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("解析字段映射变更日志失败: {}", e))?
+    } else {
+        stmt.query_map(params![safe_limit], |row| {
+            Ok(FieldAlignmentChangeLog {
+                log_id: row.get(0)?,
+                rule_id: row.get(1)?,
+                change_type: row.get(2)?,
+                old_value: row.get(3)?,
+                new_value: row.get(4)?,
+                change_reason: row.get(5)?,
+                changed_by: row.get(6)?,
+                changed_at: row.get(7)?,
+            })
+        })
+        .map_err(|e| format!("查询字段映射变更日志失败: {}", e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("解析字段映射变更日志失败: {}", e))?
+    };
+
+    Ok(logs)
+}
+
 /// 获取重复检测配置
-pub fn get_duplicate_detection_config(data_type: &str) -> Result<Option<DuplicateDetectionConfig>, String> {
+pub fn get_duplicate_detection_config(
+    data_type: &str,
+) -> Result<Option<DuplicateDetectionConfig>, String> {
     let conn = get_connection().map_err(|e| e.to_string())?;
 
     let result = conn.query_row(
@@ -4652,13 +5114,19 @@ pub fn rollback_import(audit_id: i64) -> Result<i64, String> {
             "SELECT snapshot_id, data_type, primary_key, action_type, before_data
              FROM import_snapshot
              WHERE audit_id = ?
-             ORDER BY snapshot_id DESC"
+             ORDER BY snapshot_id DESC",
         )
         .map_err(|e| e.to_string())?;
 
     let snapshots: Vec<(i64, String, String, String, Option<String>)> = stmt
         .query_map(params![audit_id], |row| {
-            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+            ))
         })
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
@@ -4674,14 +5142,18 @@ pub fn rollback_import(audit_id: i64) -> Result<i64, String> {
             "insert" => {
                 // 回滚插入：删除记录
                 match data_type.as_str() {
-                    "contracts" => conn.execute(
-                        "DELETE FROM contract_master WHERE contract_id = ?",
-                        params![primary_key],
-                    ).map_err(|e| e.to_string()),
-                    "customers" => conn.execute(
-                        "DELETE FROM customer_master WHERE customer_id = ?",
-                        params![primary_key],
-                    ).map_err(|e| e.to_string()),
+                    "contracts" => conn
+                        .execute(
+                            "DELETE FROM contract_master WHERE contract_id = ?",
+                            params![primary_key],
+                        )
+                        .map_err(|e| e.to_string()),
+                    "customers" => conn
+                        .execute(
+                            "DELETE FROM customer_master WHERE customer_id = ?",
+                            params![primary_key],
+                        )
+                        .map_err(|e| e.to_string()),
                     _ => Ok(0),
                 }
             }
@@ -4727,11 +5199,10 @@ pub fn rollback_import(audit_id: i64) -> Result<i64, String> {
         format!("更新审计状态失败: {}", e)
     })?;
 
-    conn.execute("COMMIT", [])
-        .map_err(|e| {
-            let _ = conn.execute("ROLLBACK", []);
-            format!("提交事务失败: {}", e)
-        })?;
+    conn.execute("COMMIT", []).map_err(|e| {
+        let _ = conn.execute("ROLLBACK", []);
+        format!("提交事务失败: {}", e)
+    })?;
 
     Ok(rollback_count)
 }
@@ -4753,7 +5224,7 @@ pub fn get_import_statistics() -> Result<Vec<ImportStatistics>, String> {
                     COALESCE(SUM(conflict_rows), 0) as total_conflicts,
                     MAX(started_at) as last_import_time
              FROM import_audit_log
-             GROUP BY import_type"
+             GROUP BY import_type",
         )
         .map_err(|e| e.to_string())?;
 
@@ -4803,7 +5274,10 @@ pub fn log_similar_record_pair(
 }
 
 /// 获取待处理的相似记录对
-pub fn get_pending_similar_pairs(data_type: Option<&str>, limit: i64) -> Result<Vec<SimilarRecordPair>, String> {
+pub fn get_pending_similar_pairs(
+    data_type: Option<&str>,
+    limit: i64,
+) -> Result<Vec<SimilarRecordPair>, String> {
     let conn = get_connection().map_err(|e| e.to_string())?;
 
     let query = if data_type.is_some() {
@@ -4946,9 +5420,8 @@ pub fn check_duplicate_import(file_hash: &str) -> Result<Option<ImportAuditLog>,
 // ============================================
 
 use super::schema::{
-    MeetingSnapshot, MeetingKpiConfig, RiskContractFlag,
-    RankingChangeDetail, ConsensusTemplate, MeetingActionItem,
-    MeetingSnapshotSummary,
+    ConsensusTemplate, MeetingActionItem, MeetingKpiConfig, MeetingSnapshot,
+    MeetingSnapshotSummary, RankingChangeDetail, RiskContractFlag,
 };
 
 // ============================================
@@ -4978,8 +5451,16 @@ pub fn create_meeting_snapshot(
              consensus_status, created_by)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?)",
         params![
-            meeting_type, meeting_date, snapshot_name, strategy_version_id, strategy_name,
-            kpi_summary, risk_summary, recommendation, contract_rankings, ranking_changes,
+            meeting_type,
+            meeting_date,
+            snapshot_name,
+            strategy_version_id,
+            strategy_name,
+            kpi_summary,
+            risk_summary,
+            recommendation,
+            contract_rankings,
+            ranking_changes,
             user
         ],
     )
@@ -5003,7 +5484,8 @@ pub fn list_meeting_snapshots(
              FROM v_meeting_snapshot_summary
              WHERE meeting_type = ?1
              ORDER BY meeting_date DESC, created_at DESC
-             LIMIT {}", limit.unwrap_or(50)
+             LIMIT {}",
+            limit.unwrap_or(50)
         )
     } else {
         format!(
@@ -5012,7 +5494,8 @@ pub fn list_meeting_snapshots(
                     risk_count, change_count, action_count
              FROM v_meeting_snapshot_summary
              ORDER BY meeting_date DESC, created_at DESC
-             LIMIT {}", limit.unwrap_or(50)
+             LIMIT {}",
+            limit.unwrap_or(50)
         )
     };
 
@@ -5160,7 +5643,7 @@ pub fn list_meeting_kpi_configs() -> Result<Vec<MeetingKpiConfig>, String> {
                     sort_order, enabled, description, business_meaning, created_at, updated_at
              FROM meeting_kpi_config
              WHERE enabled = 1
-             ORDER BY kpi_category, sort_order"
+             ORDER BY kpi_category, sort_order",
         )
         .map_err(|e| e.to_string())?;
 
@@ -5198,7 +5681,9 @@ pub fn list_meeting_kpi_configs() -> Result<Vec<MeetingKpiConfig>, String> {
 }
 
 /// 获取指定类别的 KPI 配置
-pub fn list_meeting_kpi_configs_by_category(category: &str) -> Result<Vec<MeetingKpiConfig>, String> {
+pub fn list_meeting_kpi_configs_by_category(
+    category: &str,
+) -> Result<Vec<MeetingKpiConfig>, String> {
     let conn = get_connection().map_err(|e| e.to_string())?;
 
     let mut stmt = conn
@@ -5210,7 +5695,7 @@ pub fn list_meeting_kpi_configs_by_category(category: &str) -> Result<Vec<Meetin
                     sort_order, enabled, description, business_meaning, created_at, updated_at
              FROM meeting_kpi_config
              WHERE kpi_category = ? AND enabled = 1
-             ORDER BY sort_order"
+             ORDER BY sort_order",
         )
         .map_err(|e| e.to_string())?;
 
@@ -5274,9 +5759,17 @@ pub fn create_risk_contract_flag(
              suggested_action, action_priority, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')",
         params![
-            snapshot_id, contract_id, risk_type, risk_level, risk_score,
-            risk_description, risk_factors, affected_kpis, potential_loss,
-            suggested_action, action_priority
+            snapshot_id,
+            contract_id,
+            risk_type,
+            risk_level,
+            risk_score,
+            risk_description,
+            risk_factors,
+            affected_kpis,
+            potential_loss,
+            suggested_action,
+            action_priority
         ],
     )
     .map_err(|e| format!("创建风险标记失败: {}", e))?;
@@ -5296,7 +5789,7 @@ pub fn list_risk_contracts_by_snapshot(snapshot_id: i64) -> Result<Vec<RiskContr
                     status, handled_by, handled_at, handling_note, created_at, updated_at
              FROM risk_contract_flag
              WHERE snapshot_id = ?
-             ORDER BY risk_level DESC, risk_score DESC"
+             ORDER BY risk_level DESC, risk_score DESC",
         )
         .map_err(|e| e.to_string())?;
 
@@ -5388,19 +5881,44 @@ pub fn save_ranking_change_details(
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             params![
-                snapshot_id, compare_snapshot_id, detail.contract_id,
-                detail.old_rank, detail.new_rank, detail.rank_change,
-                detail.old_priority, detail.new_priority, detail.priority_change,
-                detail.old_s_score, detail.new_s_score, detail.s_score_change,
-                detail.s1_change, detail.s1_old, detail.s1_new,
-                detail.s2_change, detail.s2_old, detail.s2_new,
-                detail.s3_change, detail.s3_old, detail.s3_new,
-                detail.old_p_score, detail.new_p_score, detail.p_score_change,
-                detail.p1_change, detail.p1_old, detail.p1_new,
-                detail.p2_change, detail.p2_old, detail.p2_new,
-                detail.p3_change, detail.p3_old, detail.p3_new,
-                detail.primary_factor, detail.primary_factor_name, detail.explain_text,
-                detail.ws_used, detail.wp_used
+                snapshot_id,
+                compare_snapshot_id,
+                detail.contract_id,
+                detail.old_rank,
+                detail.new_rank,
+                detail.rank_change,
+                detail.old_priority,
+                detail.new_priority,
+                detail.priority_change,
+                detail.old_s_score,
+                detail.new_s_score,
+                detail.s_score_change,
+                detail.s1_change,
+                detail.s1_old,
+                detail.s1_new,
+                detail.s2_change,
+                detail.s2_old,
+                detail.s2_new,
+                detail.s3_change,
+                detail.s3_old,
+                detail.s3_new,
+                detail.old_p_score,
+                detail.new_p_score,
+                detail.p_score_change,
+                detail.p1_change,
+                detail.p1_old,
+                detail.p1_new,
+                detail.p2_change,
+                detail.p2_old,
+                detail.p2_new,
+                detail.p3_change,
+                detail.p3_old,
+                detail.p3_new,
+                detail.primary_factor,
+                detail.primary_factor_name,
+                detail.explain_text,
+                detail.ws_used,
+                detail.wp_used
             ],
         );
 
@@ -5412,11 +5930,10 @@ pub fn save_ranking_change_details(
         count += 1;
     }
 
-    conn.execute("COMMIT", [])
-        .map_err(|e| {
-            let _ = conn.execute("ROLLBACK", []);
-            format!("提交事务失败: {}", e)
-        })?;
+    conn.execute("COMMIT", []).map_err(|e| {
+        let _ = conn.execute("ROLLBACK", []);
+        format!("提交事务失败: {}", e)
+    })?;
 
     Ok(count)
 }
@@ -5445,7 +5962,8 @@ pub fn list_ranking_changes_by_snapshot(
          FROM ranking_change_detail
          WHERE snapshot_id = ?
          ORDER BY ABS(rank_change) DESC
-         LIMIT {}", limit.unwrap_or(100)
+         LIMIT {}",
+        limit.unwrap_or(100)
     );
 
     let mut stmt = conn.prepare(&query).map_err(|e| e.to_string())?;
@@ -5507,7 +6025,9 @@ pub fn list_ranking_changes_by_snapshot(
 // ============================================
 
 /// 获取共识模板列表
-pub fn list_consensus_templates(meeting_type: Option<&str>) -> Result<Vec<ConsensusTemplate>, String> {
+pub fn list_consensus_templates(
+    meeting_type: Option<&str>,
+) -> Result<Vec<ConsensusTemplate>, String> {
     let conn = get_connection().map_err(|e| e.to_string())?;
 
     let query = if meeting_type.is_some() {
@@ -5574,7 +6094,9 @@ pub fn list_consensus_templates(meeting_type: Option<&str>) -> Result<Vec<Consen
 }
 
 /// 获取默认共识模板
-pub fn get_default_consensus_template(meeting_type: &str) -> Result<Option<ConsensusTemplate>, String> {
+pub fn get_default_consensus_template(
+    meeting_type: &str,
+) -> Result<Option<ConsensusTemplate>, String> {
     let conn = get_connection().map_err(|e| e.to_string())?;
 
     let result = conn.query_row(
@@ -5636,8 +6158,16 @@ pub fn create_meeting_action_item(
              status, created_by)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?)",
         params![
-            snapshot_id, action_title, action_description, action_category,
-            priority, due_date, assignee, department, related_contracts, user
+            snapshot_id,
+            action_title,
+            action_description,
+            action_category,
+            priority,
+            due_date,
+            assignee,
+            department,
+            related_contracts,
+            user
         ],
     )
     .map_err(|e| format!("创建行动项失败: {}", e))?;
@@ -5656,7 +6186,7 @@ pub fn list_action_items_by_snapshot(snapshot_id: i64) -> Result<Vec<MeetingActi
                     status, completion_rate, completed_at, notes, created_by, created_at, updated_at
              FROM meeting_action_item
              WHERE snapshot_id = ?
-             ORDER BY priority, due_date"
+             ORDER BY priority, due_date",
         )
         .map_err(|e| e.to_string())?;
 
@@ -5827,6 +6357,6 @@ pub fn get_ranking_change_stats(snapshot_id: i64) -> Result<serde_json::Value, S
             "avg_change": 0.0,
             "max_up": 0,
             "max_down": 0
-        }))
+        })),
     }
 }
